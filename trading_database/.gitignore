@@ -1,0 +1,21 @@
+# Python 編譯暫存檔案
+__pycache__/
+*.pyc
+*.pyo
+
+# 虛擬環境
+venv/
+env/
+ENV/
+.venv/
+
+# 敏感資料
+.env
+
+# IDE 設定
+.vscode/
+.idea/
+
+# 系統檔
+.DS_Store
+Thumbs.db
