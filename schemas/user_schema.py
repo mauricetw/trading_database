@@ -1,16 +1,16 @@
 from pydantic import BaseModel
 
 class UserCreate(BaseModel):
-    account: str
+    username: str
     password: str
     email: str
 
 class UserLogin(BaseModel):
-    account: str
+    username: str
     password: str
 
 class ForgotPasswordRequest(BaseModel):
-    account: str
+    username: str
 
 class ResetPasswordRequest(BaseModel):
     token: str
@@ -18,7 +18,7 @@ class ResetPasswordRequest(BaseModel):
 
 class UserResponse(BaseModel):
     id: int
-    account: str
+    username: str
     email: str
 
     class Config:

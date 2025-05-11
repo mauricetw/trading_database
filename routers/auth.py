@@ -14,13 +14,13 @@ router = APIRouter()
 @router.post("/register", response_model=UserResponse)
 async def register(user: UserCreate, db: Session = Depends(get_db)):
     # 檢查帳號是否已經存在
-    existing_user = db.query(User).filter(User.account == user.account).first()
+    existing_user = db.query(User).filter(User.username == user.username).first()
     if existing_user:
         raise HTTPException(status_code=400, detail="帳號已存在")
 
     # 新增使用者
     new_user = User(
-        account=user.account,
+        username=user.username,
         password=hash_password(user.password),
         email=user.email
     )
@@ -34,7 +34,7 @@ async def register(user: UserCreate, db: Session = Depends(get_db)):
 @router.post("/login", response_model=UserResponse)
 async def login(user: UserLogin, db: Session = Depends(get_db)):
     # 檢查帳號是否存在
-    db_user = db.query(User).filter((User.account == user.login) | (User.email == user.login)).first()
+    db_user = db.query(User).filter((User.username == user.login) | (User.email == user.login)).first()
     if not db_user or not verify_password(user.password, db_user.password):
         raise HTTPException(status_code=400, detail="帳號或密碼錯誤")
 
