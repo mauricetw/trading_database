@@ -6,11 +6,11 @@ class UserCreate(BaseModel):
     email: str
 
 class UserLogin(BaseModel):
-    username: str
+    login: str
     password: str
 
 class ForgotPasswordRequest(BaseModel):
-    username: str
+    login: str
 
 class ResetPasswordRequest(BaseModel):
     token: str
@@ -20,6 +20,7 @@ class UserResponse(BaseModel):
     id: int
     username: str
     email: str
+    token: str
 
     class Config:
         orm_mode = True

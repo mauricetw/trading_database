@@ -26,3 +26,15 @@ def verify_reset_token(token: str) -> Optional[int]:
         raise HTTPException(status_code=400, detail="Token 已過期")
     except jwt.JWTError:
         raise HTTPException(status_code=400, detail="無效的 Token")
+
+def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
+    to_encode = data.copy()
+
+    if expires_delta:
+        expire = datetime.utcnow() + expires_delta
+    else:
+        expire = datetime.utcnow() + timedelta(minutes=15)
+
+    to_encode.update({"exp": expire})
+    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    return encoded_jwt
