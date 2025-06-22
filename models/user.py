@@ -1,10 +1,29 @@
 from database.db import Base
-from sqlalchemy import Column, Integer, String
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, Float, Text
+from sqlalchemy.dialects.mysql import LONGTEXT
+from sqlalchemy.types import JSON
+from datetime import datetime
 
 class User(Base):
     __tablename__ = "users"
 
     id = Column(Integer, primary_key=True, index=True)
-    username = Column(String(255), unique=True, index=True)
-    password = Column(String(255))
-    email = Column(String(255), unique=True, index=True)
+    username = Column(String(255), unique=True, index=True, nullable=False)
+    password = Column(String(255), nullable=False)
+    email = Column(String(255), unique=True, index=True, nullable=False)
+
+    phone_number = Column(String(20), nullable=True)
+    avatar_url = Column(String(500), nullable=True)
+    registered_at = Column(DateTime, default=datetime.utcnow)
+    last_login_at = Column(DateTime, nullable=True)
+    bio = Column(Text, nullable=True)
+    school_name = Column(String(255), nullable=True)
+    is_verified = Column(Boolean, default=False)
+    roles = Column(JSON, nullable=True)  # JSON 儲存角色清單，例如 ["user", "seller"]
+
+    # 賣家相關
+    is_seller = Column(Boolean, default=False)
+    seller_name = Column(String(255), nullable=True)
+    seller_description = Column(LONGTEXT, nullable=True)
+    seller_rating = Column(Float, nullable=True)
+    product_count = Column(Integer, default=0)

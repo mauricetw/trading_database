@@ -23,7 +23,9 @@ async def register(user: UserCreate, db: Session = Depends(get_db)):
     new_user = User(
         username=user.username,
         password=hash_password(user.password),
-        email=user.email
+        email=user.email,
+        registered_at=datetime.utcnow(),
+        is_verified=False,  #預設未驗證
     )
     db.add(new_user)
     db.commit()
@@ -37,7 +39,20 @@ async def register(user: UserCreate, db: Session = Depends(get_db)):
         "id": new_user.id,
         "username": new_user.username,
         "email": new_user.email,
-        "token": token
+        "token": token,
+        "registeredAt": new_user.registered_at.isoformat(),
+        "lastLoginAt": None,
+        "phoneNumber": new_user.phone_number,
+        "avatarUrl": new_user.avatar_url,
+        "bio": new_user.bio,
+        "schoolName": new_user.school_name,
+        "isVerified": new_user.is_verified,
+        "roles": new_user.roles.split(',') if new_user.roles else [],
+        "isSeller": new_user.is_seller,
+        "sellerName": new_user.seller_name,
+        "sellerDescription": new_user.seller_description,
+        "sellerRating": new_user.seller_rating,
+        "productCount": new_user.product_count,
     }
 
 # 登入 API
@@ -47,6 +62,10 @@ async def login(user: UserLogin, db: Session = Depends(get_db)):
     db_user = db.query(User).filter((User.username == user.login) | (User.email == user.login)).first()
     if not db_user or not verify_password(user.password, db_user.password):
         raise HTTPException(status_code=400, detail="帳號或密碼錯誤")
+
+    # 更新最後登入時間
+    db_user.last_login_at = datetime.utcnow()
+    db.commit()
 
     # 生成 Token
     access_token_expires = timedelta(minutes=30)
@@ -58,7 +77,20 @@ async def login(user: UserLogin, db: Session = Depends(get_db)):
         "id": db_user.id,
         "username": db_user.username,
         "email": db_user.email,
-        "token": token
+        "token": token,
+        "registeredAt": db_user.registered_at.isoformat(),
+        "lastLoginAt": db_user.last_login_at.isoformat() if db_user.last_login_at else None,
+        "phoneNumber": db_user.phone_number,
+        "avatarUrl": db_user.avatar_url,
+        "bio": db_user.bio,
+        "schoolName": db_user.school_name,
+        "isVerified": db_user.is_verified,
+        "roles": db_user.roles.split(',') if db_user.roles else [],
+        "isSeller": db_user.is_seller,
+        "sellerName": db_user.seller_name,
+        "sellerDescription": db_user.seller_description,
+        "sellerRating": db_user.seller_rating,
+        "productCount": db_user.product_count
     }
 
 # 忘記密碼 API
