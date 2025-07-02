@@ -2,6 +2,7 @@ from database.db import Base
 from sqlalchemy import Column, Integer, String, Boolean, DateTime, Float, Text
 from sqlalchemy.dialects.mysql import LONGTEXT
 from sqlalchemy.types import JSON
+from sqlalchemy.orm import relationship
 from datetime import datetime
 
 class User(Base):
@@ -21,12 +22,16 @@ class User(Base):
     is_verified = Column(Boolean, default=False)
     roles = Column(JSON, nullable=True)  # JSON 儲存角色清單，例如 ["user", "seller"]
 
+    buyer_rating = Column(Float, nullable=True)
+
     # 賣家相關
     is_seller = Column(Boolean, default=False)
     seller_name = Column(String(255), nullable=True)
     seller_description = Column(LONGTEXT, nullable=True)
     seller_rating = Column(Float, nullable=True)
     product_count = Column(Integer, default=0)
+    
+    products = relationship("Product", back_populates="seller")
 
-    buyerRating = Column(Float, nullable=True)
-    sellerRating = Column(Float, nullable=True)
+    def __repr__(self):
+        return f"<User(id={self.id}, username={self.username}, email={self.email})>"
