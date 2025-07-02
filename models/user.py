@@ -27,3 +27,6 @@ class User(Base):
     seller_description = Column(LONGTEXT, nullable=True)
     seller_rating = Column(Float, nullable=True)
     product_count = Column(Integer, default=0)
+
+    buyerRating = Column(Float, nullable=True)
+    sellerRating = Column(Float, nullable=True)
