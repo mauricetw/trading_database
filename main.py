@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from routers import auth, products, orders
+from routers import auth, products, orders, getUser
 from database.db import engine, Base
 from fastapi.middleware.cors import CORSMiddleware
 
