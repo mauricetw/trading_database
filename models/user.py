@@ -2,6 +2,7 @@ from database.db import Base
 from sqlalchemy import Column, Integer, String, Boolean, DateTime, Float, Text
 from sqlalchemy.dialects.mysql import LONGTEXT
 from sqlalchemy.types import JSON
+from sqlalchemy.orm import relationship
 from datetime import datetime
 
 class User(Base):
@@ -21,6 +22,8 @@ class User(Base):
     is_verified = Column(Boolean, default=False)
     roles = Column(JSON, nullable=True)  # JSON 儲存角色清單，例如 ["user", "seller"]
 
+    buyer_rating = Column(Float, nullable=True)
+
     # 賣家相關
     is_seller = Column(Boolean, default=False)
     seller_name = Column(String(255), nullable=True)
@@ -31,3 +34,8 @@ class User(Base):
     # 重設密碼驗證碼
     verification_code = Column(String(6), nullable=True)
     code_expiration = Column(DateTime, nullable=True)
+    
+    products = relationship("Product", back_populates="seller")
+
+    def __repr__(self):
+        return f"<User(id={self.id}, username={self.username}, email={self.email})>"
