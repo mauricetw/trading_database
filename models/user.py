@@ -27,3 +27,7 @@ class User(Base):
     seller_description = Column(LONGTEXT, nullable=True)
     seller_rating = Column(Float, nullable=True)
     product_count = Column(Integer, default=0)
+
+    # 重設密碼驗證碼
+    verification_code = Column(String(6), nullable=True)
+    code_expiration = Column(DateTime, nullable=True)

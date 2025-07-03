@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from datetime import timedelta
+from datetime import datetime, timedelta
+from pydantic import BaseModel
 from database.db import get_db
 from models.user import User
 from schemas.user_schema import UserCreate, UserLogin, ForgotPasswordRequest, ResetPasswordRequest, UserResponse
@@ -111,11 +112,12 @@ async def forgot_password(request: ForgotPasswordRequest, db: Session = Depends(
         BACKEND_URL = os.getenv("BACKEND_URL")
         if not BACKEND_URL:
             raise HTTPException(status_code=500, detail="BACKEND_URL 未設定")
-    
-        #reset_link = f"app://reset-password/{user.id}?token={token}"
 
-        #發送密碼
-        send_reset_email(user.email)
+        # 發送驗證信並儲存驗證碼
+        code = send_reset_email(user.email)
+        user.verification_code = code
+        user.code_expiration = datetime.utcnow() + timedelta(minutes=10)
+        db.commit()
 
         return {"message": "密碼重設信已寄出"}
     
@@ -123,7 +125,40 @@ async def forgot_password(request: ForgotPasswordRequest, db: Session = Depends(
         print(f"Error in forgot_password: {e}")
         raise HTTPException(status_code=500, detail=f"伺服器錯誤：{str(e)}")
 
-    
+
+# 驗證驗證碼 API
+class VerifyCodeRequest(BaseModel):
+    user_id: int
+    code: str
+
+@router.post("/verify-code")
+async def verify_code(request: VerifyCodeRequest, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.id == request.user_id).first()
+    if not user or not user.verification_code:
+        raise HTTPException(status_code=404, detail="使用者不存在或未申請驗證")
+
+    if user.verification_code != request.code:
+        raise HTTPException(status_code=400, detail="驗證碼錯誤")
+
+    if datetime.utcnow() > user.code_expiration:
+        raise HTTPException(status_code=400, detail="驗證碼已過期")
+
+    # 驗證通過後清除驗證碼
+    user.verification_code = None
+    user.code_expiration = None
+
+    # 產生 token（供 reset-password 用）
+    token = create_reset_token(user.id)
+
+    db.commit()
+
+    return {
+        "message": "驗證成功",
+        "token": token
+    }
+
+
+
 
 # 重設密碼 API
 @router.post("/reset-password")
@@ -133,11 +168,20 @@ async def reset_password(request: ResetPasswordRequest, db: Session = Depends(ge
     if not user_id:
         raise HTTPException(status_code=400, detail="Token 無效或過期")
 
-    # 更新密碼
+    # 取得使用者
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="找不到使用者")
 
+    # 判斷密碼長度
+    if len(request.new_password) < 8:
+        raise HTTPException(status_code=400, detail="密碼長度必須至少 8 個字元")
+
+    # 避免與舊密碼相同
+    if verify_password(request.new_password, user.password):
+        raise HTTPException(status_code=400, detail="新密碼不得與舊密碼相同")
+
+    # 更新密碼
     user.password = hash_password(request.new_password)
     db.commit()
 

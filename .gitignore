@@ -1,7 +1,11 @@
 # Python 編譯暫存檔案
 __pycache__/
+*.py[cod]
+*.egg-info/
 *.pyc
 *.pyo
+dist/
+build/
 
 # 虛擬環境
 venv/
@@ -11,6 +15,9 @@ ENV/
 
 # 敏感資料
 .env
+
+# Alembic 快取或資料庫
+*.db
 
 # IDE 設定
 .vscode/
