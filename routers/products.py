@@ -29,6 +29,9 @@ async def create_product(product_data: ProductCreate, db: Session = Depends(get_
     db.commit()
     db.refresh(db_product)
     return db_product
+except Exception as e:
+    db.rollback()
+    raise HTTPException(status_code=500,detail=f"建立商品失敗":{str(e)}")
 
 
 @router.get("/products/{product_id}", response_model=ProductResponse)
