@@ -1,42 +1,49 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 from typing import List, Optional
 from datetime import datetime
 
+# --- 用於在商品回應中顯示的賣家公開資訊 ---
+# 避免洩漏使用者 email、密碼等敏感資訊
+class UserInProductResponse(BaseModel):
+    id: int
+    username: str
+    avatar_url: Optional[str] = None
 
-# --- 嵌套物件：ShippingInformation ---
-class ShippingInformation(BaseModel):
-    cost: float
-    region: str
-    carrier: Optional[str] = None
+    class Config:
+        orm_mode = True
 
-
-# --- 商品建立用模型 ---
+# --- 用於前端建立商品時傳入的資料模型 ---
 class ProductCreate(BaseModel):
     name: str
     description: str
     price: float
     original_price: Optional[float] = None
     category_id: int
-    stock_quantity: int
-    image_urls: List[str]
     category: str
-    status: str = "available"
+    stock_quantity: int = 1
+    image_urls: Optional[List[str]] = []
+    tags: Optional[List[str]] = []
+    # 注意：seller_id 不應該由前端提供，將從 token 中獲取
 
-    tags: Optional[List[str]] = None
-    shipping_info: Optional[ShippingInformation] = None
-    seller_id: int  # 必要：來自前端登入使用者
-
-    class Config:
-        orm_mode = True
-
-
-# --- 商品回傳用模型 ---
-class ProductResponse(ProductCreate):
+# --- 用於 API 回應的商品資料模型 ---
+class ProductResponse(BaseModel):
     id: int
+    name: str
+    description: str
+    price: float
+    original_price: Optional[float] = None
+    category_id: int
+    category: str
+    stock_quantity: int
+    status: str
+    image_urls: Optional[List[str]] = []
+    tags: Optional[List[str]] = []
     created_at: datetime
     updated_at: datetime
-    sales_count: int = 0
-    average_rating: Optional[float]
-    review_count: Optional[int]
-    is_favorite: bool = False
-    is_sold: bool = False
+    
+    # 關聯的賣家資訊
+    seller_id: int
+    seller: UserInProductResponse # 巢狀顯示賣家公開資訊
+
+    class Config:
+        orm_mode = True # 允許 Pydantic 從 ORM 物件自動轉換
