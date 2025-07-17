@@ -11,27 +11,28 @@ router = APIRouter()
 @router.post("/products", response_model=ProductResponse)
 async def create_product(product_data: ProductCreate, db: Session = Depends(get_db)):
     # 轉成 dict 後轉 JSON
-    db_product = Product(
-        name=product_data.name,
-        description=product_data.description,
-        price=product_data.price,
-        original_price=product_data.original_price,
-        category_id=product_data.category_id,
-        stock_quantity=product_data.stock_quantity,
-        image_urls=product_data.image_urls,
-        category=product_data.category,
-        status=product_data.status,
-        tags=product_data.tags,
-        shipping_info=product_data.shipping_info.dict() if product_data.shipping_info else None,
-        seller_id=product_data.seller_id,
-    )
-    db.add(db_product)
-    db.commit()
-    db.refresh(db_product)
-    return db_product
-except Exception as e:
-    db.rollback()
-    raise HTTPException(status_code=500,detail=f"建立商品失敗":{str(e)}")
+    try:
+        db_product = Product(
+            name=product_data.name,
+            description=product_data.description,
+            price=product_data.price,
+            original_price=product_data.original_price,
+            category_id=product_data.category_id,
+            stock_quantity=product_data.stock_quantity,
+            image_urls=product_data.image_urls,
+            category=product_data.category,
+            status=product_data.status,
+            tags=product_data.tags,
+            shipping_info=product_data.shipping_info.dict() if product_data.shipping_info else None,
+            seller_id=product_data.seller_id,
+        )
+        db.add(db_product)
+        db.commit()
+        db.refresh(db_product)
+        return db_product
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500,detail=f"建立商品失敗:{str(e)}")
 
 
 @router.get("/products/{product_id}", response_model=ProductResponse)

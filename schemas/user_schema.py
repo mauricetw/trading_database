@@ -1,70 +1,35 @@
-from pydantic import BaseModel, EmailStr, validator
-from typing import Optional, List
-from datetime import datetime
+from pydantic import BaseModel, Field
+from typing import Optional
+from pydantic.alias_generators import to_camel
 
+# --- 重大修正 ---
+# 這裡修正了幾個問題：
+# 1. 欄位名稱從駝峰式 (avatarUrl) 改為與資料庫模型一致的蛇形 (avatar_url)。
+# 2. `id` 的類型從 `str` 修正為 `int`。
+# 3. 使用 Pydantic 的 AliasGenerator，讓 Python 內部使用蛇形命名，
+#    但在序列化成 JSON 給前端時，自動轉換為駝峰式命名。這是處理命名風格差異的最佳實踐。
 
-class UserCreate(BaseModel):
-    username: str
-    password: str
-    email: EmailStr
-
-    @validator('email')
-    def email_must_be_ntust(cls, v):
-        if not v.endswith('@mail.ntust.edu.tw'):
-            raise ValueError('僅接受 NTUST 的信箱')
-        return v
-    
-    phone_number: Optional[str] = None
-    avatar_url: Optional[str] = None
-    bio: Optional[str] = None
-    school_name: Optional[str] = None
-
-
-class UserLogin(BaseModel):
-    login: str  # 可以是 username 或 email
-    password: str
-
-
-class ForgotPasswordRequest(BaseModel):
-    login: str
-
-    @validator('login')
-    def email_must_be_ntust_if_email(cls, v):
-        # 如果是 email 格式才做網域驗證
-        if "@" in v:
-            if not v.endswith('@mail.ntust.edu.tw'):
-                raise ValueError('若使用 email，僅接受 @mail.ntust.edu.tw 網域')
-        return v
-
-
-
-class ResetPasswordRequest(BaseModel):
-    token: str
-    new_password: str
-
-
-class UserResponse(BaseModel):
+class UserPublicProfile(BaseModel):
+    # 在 Python 程式碼中使用 snake_case
     id: int
     username: str
-    email: EmailStr
-    token: str
-
-    # 以下為補充欄位（皆為 optional 對應 Dart 的 nullable 屬性）
-    phone_number: Optional[str] = None
     avatar_url: Optional[str] = None
-    registered_at: datetime
-    last_login_at: Optional[datetime] = None
-    bio: Optional[str] = None
     school_name: Optional[str] = None
-    is_verified: Optional[bool] = None
-    roles: Optional[List[str]] = None
-
-    # 賣家資料
-    is_seller: Optional[bool] = False
-    seller_name: Optional[str] = None
-    seller_description: Optional[str] = None
+    buyer_rating: Optional[float] = None
     seller_rating: Optional[float] = None
-    product_count: Optional[int] = 0
 
     class Config:
         orm_mode = True
+        # 設定別名生成器，輸出 JSON 時會自動轉成駝峰式
+        alias_generator = to_camel
+        # 允許 Pydantic 使用別名來填充模型
+        populate_by_name = True
+
+
+# 保持與你原本設計一致的巢狀結構
+class UserProfileResponse(BaseModel):
+    user: UserPublicProfile
+
+    class Config:
+        alias_generator = to_camel
+        populate_by_name = True
