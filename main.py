@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from routers import auth, products, orders, user
+from routers import auth, products, orders, users
 from database.db import engine, Base
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -29,7 +29,7 @@ app.add_middleware(
 app.include_router(auth.router, prefix="/auth", tags=["使用者認證 (Authentication)"])
 app.include_router(products.router, prefix="/products", tags=["商品 (Products)"])
 app.include_router(orders.router, prefix="/orders", tags=["訂單 (Orders)"])
-app.include_router(user.router, prefix="/users", tags=["使用者資料 (Users)"])
+app.include_router(users.router, prefix="/users", tags=["使用者資料 (Users)"])
 
 @app.get("/", tags=["根目錄 (Root)"])
 def read_root():

@@ -6,7 +6,7 @@ from database.db import get_db
 from models.user import User
 from schemas.auth_schema import (
     UserCreate, UserLogin, ForgotPasswordRequest, ResetPasswordRequest, 
-    VerifyCodeRequest, LoginResponse, AuthResponse, UserDataForAuth
+    VerifyCodeRequest, LoginResponse, AuthResponse, UserDataForAuth # 確保 UserDataForAuth 已引入
 )
 from utils.hashing import hash_password, verify_password
 from utils.token import create_access_token, create_reset_token, verify_reset_token
@@ -18,7 +18,6 @@ router = APIRouter()
 # --- 重構後的註冊 API ---
 @router.post("/register", response_model=LoginResponse, status_code=status.HTTP_201_CREATED)
 async def register(user_data: UserCreate, db: Session = Depends(get_db)):
-    # 檢查 email 或 username 是否已經存在
     existing_user = db.query(User).filter(
         or_(User.username == user_data.username, User.email == user_data.email)
     ).first()
@@ -28,7 +27,6 @@ async def register(user_data: UserCreate, db: Session = Depends(get_db)):
         else:
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="此電子郵件已被註冊")
 
-    # 建立新的使用者物件
     new_user = User(
         username=user_data.username,
         password=hash_password(user_data.password),
@@ -38,29 +36,28 @@ async def register(user_data: UserCreate, db: Session = Depends(get_db)):
         bio=user_data.bio,
         school_name=user_data.school_name,
         registered_at=datetime.utcnow(),
-        is_verified=False, # 預設未驗證
-        roles=["user"] # 預設角色
+        is_verified=False,
+        roles=["user"]
     )
     db.add(new_user)
     db.commit()
     db.refresh(new_user)
 
-    # --- 安全性與一致性修正 ---
-    # 統一使用 user.id 作為 token 的 subject (sub)
     access_token = create_access_token(data={"sub": str(new_user.id)})
 
-    # --- 程式碼品質提升 ---
-    # 不再手動建立字典，而是讓 Pydantic 自動從 ORM 物件轉換。
-    # 這樣更簡潔、更健壯，且不會有手動處理 `roles` 的 bug。
+    # --- 錯誤修正 ---
+    # Pydantic 的 LoginResponse 模型期望 user 欄位是一個 UserDataForAuth 的實例。
+    # 我們需要手動使用 .from_orm() 將 SQLAlchemy 的 new_user 物件轉換成 Pydantic 模型。
+    user_for_response = UserDataForAuth.from_orm(new_user)
+
     return LoginResponse(
         token=AuthResponse(access_token=access_token),
-        user=new_user
+        user=user_for_response # 傳入轉換後的 Pydantic 模型
     )
 
 # --- 重構後的登入 API ---
 @router.post("/login", response_model=LoginResponse)
 async def login(form_data: UserLogin, db: Session = Depends(get_db)):
-    # 允許使用 username 或 email 登入
     db_user = db.query(User).filter(
         or_(User.username == form_data.login, User.email == form_data.login)
     ).first()
@@ -72,43 +69,39 @@ async def login(form_data: UserLogin, db: Session = Depends(get_db)):
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    # 更新最後登入時間
     db_user.last_login_at = datetime.utcnow()
     db.commit()
     db.refresh(db_user)
 
-    # 統一使用 user.id 作為 token 的 subject
     access_token = create_access_token(data={"sub": str(db_user.id)})
     
-    # 同樣，直接回傳 ORM 物件，讓 Pydantic 處理
+    # --- 錯誤修正 (與註冊 API 相同的原因) ---
+    # 手動將 SQLAlchemy 的 db_user 物件轉換成 UserDataForAuth Pydantic 模型。
+    user_for_response = UserDataForAuth.from_orm(db_user)
+
     return LoginResponse(
         token=AuthResponse(access_token=access_token),
-        user=db_user
+        user=user_for_response # 傳入轉換後的 Pydantic 模型
     )
 
-# --- 優化後的忘記密碼流程 ---
+# --- 忘記密碼流程 (保持不變) ---
 @router.post("/forgot-password", status_code=status.HTTP_200_OK)
 async def forgot_password(request: ForgotPasswordRequest, db: Session = Depends(get_db)):
     user = db.query(User).filter(or_(User.username == request.login, User.email == request.login)).first()
 
-    # 為了安全，即使找不到使用者，也回傳成功的訊息，避免被探測帳號是否存在
     if not user:
         return {"message": "如果帳號存在，密碼重設信將會寄到您的信箱。"}
 
-    # 產生一個 6 位數的隨機驗證碼
     code = str(random.randint(100000, 999999))
     
-    # 寄送郵件
     try:
         send_reset_email(user.email, code)
     except Exception as e:
-        # 即使寄信失敗，也不要讓使用者知道，但後端需要記錄錯誤
         print(f"Error sending email to {user.email}: {e}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="無法寄送郵件，請稍後再試。")
 
-    # 儲存驗證碼和過期時間到資料庫
     user.verification_code = code
-    user.code_expiration = datetime.utcnow() + timedelta(minutes=10) # 10 分鐘有效
+    user.code_expiration = datetime.utcnow() + timedelta(minutes=10)
     db.commit()
 
     return {"message": "如果帳號存在，密碼重設信將會寄到您的信箱。"}
@@ -127,7 +120,6 @@ async def verify_code(request: VerifyCodeRequest, db: Session = Depends(get_db))
     if datetime.utcnow() > user.code_expiration:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="驗證碼已過期")
 
-    # 驗證通過後，清除驗證碼，並產生一個一次性的重設密碼 token
     user.verification_code = None
     user.code_expiration = None
     db.commit()
