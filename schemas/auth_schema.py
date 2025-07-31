@@ -2,10 +2,22 @@ from pydantic import BaseModel, EmailStr, validator, Field
 from typing import Optional, List
 from datetime import datetime
 
+# --- 新增：用於發送驗證碼請求的 Schema ---
+class SendVerificationCodeRequest(BaseModel):
+    email: EmailStr
+
+    @validator('email')
+    def email_must_be_ntust(cls, v):
+        if not v.endswith('@mail.ntust.edu.tw'):
+            raise ValueError('僅接受 NTUST 的信箱')
+        return v
+
 class UserCreate(BaseModel):
     username: str
-    password: str = Field(..., min_length=8, description="密碼長度必須至少 8 個字元")
+    password: str = Field(..., min_length=8)
     email: EmailStr
+    # --- 新增：接收前端傳來的驗證碼 ---
+    code: str 
 
     @validator('email')
     def email_must_be_ntust(cls, v):
