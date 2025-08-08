@@ -1,9 +1,6 @@
 # --- FILE: trading_database/main.py ---
-
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-
-# --- 1. 引入所有需要的 router ---
 from routers import (
     auth, 
     user, 
