@@ -30,6 +30,7 @@ app.include_router(auth.router, prefix="/auth", tags=["使用者認證 (Authenti
 app.include_router(products.router, prefix="/products", tags=["商品 (Products)"])
 app.include_router(orders.router, prefix="/orders", tags=["訂單 (Orders)"])
 app.include_router(users.router, prefix="/users", tags=["使用者資料 (Users)"])
+app.include_router(seller.router, prefix="/seller", tags=["賣家中心 (Seller)"])
 
 @app.get("/", tags=["根目錄 (Root)"])
 def read_root():

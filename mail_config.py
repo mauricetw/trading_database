@@ -36,7 +36,7 @@ def send_reset_email(email: str, code: str):
     <html>
     <body>
         <p>您好，</p>
-        <p>您正在申請重設您在交易平台的帳號密碼。</p>
+        <p>此為交易平台的驗證碼信件。</p>
         <p>您的驗證碼是：</p>
         <h2 style="font-weight:bold; color: #333;">{code}</h2>
         <p>請在 10 分鐘內於應用程式中輸入此驗證碼以完成後續步驟。</p>

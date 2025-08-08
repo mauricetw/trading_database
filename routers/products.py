@@ -2,11 +2,9 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session, joinedload
 from database.db import get_db
 from models.product import Product
-from models.user import User # 引入 User 模型以使用 get_current_user
+from models.user import User
 from schemas.product_schema import ProductCreate, ProductResponse
 from typing import List, Optional
-
-# --- 引入 get_current_user 依賴 ---
 from utils.token import get_current_user
 
 router = APIRouter()
@@ -89,3 +87,38 @@ async def get_product(product_id: int, db: Session = Depends(get_db)):
             detail="找不到此商品"
         )
     return product
+
+
+# --- 刪除商品的 API ---
+@router.delete("/{product_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_product(
+    product_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    刪除一件商品。
+    只有商品的擁有者才能刪除。
+    """
+    # 1. 查找商品是否存在
+    product_to_delete = db.query(Product).filter(Product.id == product_id).first()
+
+    if not product_to_delete:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="找不到此商品"
+        )
+
+    # 2. 安全性檢查：確認當前登入者是否為該商品的賣家
+    if product_to_delete.seller_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="您沒有權限刪除此商品"
+        )
+
+    # 3. 執行刪除
+    db.delete(product_to_delete)
+    db.commit()
+
+    # 成功刪除時，回傳 204 No Content，不需要 body
+    return None
