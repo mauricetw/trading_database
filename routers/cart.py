@@ -87,3 +87,17 @@ async def remove_item_from_cart(product_id: int, db: Session = Depends(get_db), 
         db.commit()
     
     return None # 回傳 204 No Content
+
+# --- 【新增】清空購物車 API ---
+@router.delete("", status_code=status.HTTP_204_NO_CONTENT)
+async def clear_my_cart(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """清空當前登入使用者的整個購物車。"""
+    # 查詢屬於該使用者的所有購物車項目
+    items_to_delete = db.query(CartItem).filter(CartItem.user_id == current_user.id).all()
+    
+    if items_to_delete:
+        for item in items_to_delete:
+            db.delete(item)
+        db.commit()
+        
+    return None
