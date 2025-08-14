@@ -3,7 +3,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from routers import (
     auth, 
-    user, 
+    users, 
     products, 
     seller, 
     cart, 
@@ -42,7 +42,7 @@ app.add_middleware(
 # 為每個 router 加上 tags，讓自動產生的 API 文件 (/docs) 更清晰。
 
 app.include_router(auth.router, prefix="/auth", tags=["使用者認證 (Authentication)"])
-app.include_router(user.router, prefix="/users", tags=["使用者資料 (Users)"])
+app.include_router(users.router, prefix="/users", tags=["使用者資料 (Users)"])
 app.include_router(products.router, prefix="/products", tags=["商品 (Products)"])
 
 app.include_router(seller.router, prefix="/seller", tags=["賣家中心 (Seller)"])
