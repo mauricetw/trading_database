@@ -1,3 +1,4 @@
+# --- FILE: routers/auth.py ---
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
@@ -6,16 +7,20 @@ from database.db import get_db
 from models.user import User
 from schemas.auth_schema import (
     UserCreate, UserLogin, ForgotPasswordRequest, ResetPasswordRequest, 
-    VerifyCodeRequest, LoginResponse, AuthResponse, UserDataForAuth # 確保 UserDataForAuth 已引入
+    VerifyCodeRequest, LoginResponse, AuthResponse, UserDataForAuth,
+    SendVerificationCodeRequest # 引入新的 Schema
 )
 from utils.hashing import hash_password, verify_password
 from utils.token import create_access_token, create_reset_token, verify_reset_token
 from mail_config import send_reset_email
 import random
-from schemas.auth_schema import UserCreate, SendVerificationCodeRequest # 引入新的 Schema
 
 router = APIRouter()
 
+# --- 暫存驗證碼的記憶體字典 ---
+# 格式: {"user@email.com": {"code": "123456", "expires_at": datetime_object}}
+# 注意：這在伺服器重啟後會遺失。生產環境建議改用 Redis。
+verification_codes = {}
 
 # --- 新增 API：發送註冊驗證碼 ---
 @router.post("/send-verification-code", status_code=status.HTTP_200_OK)
@@ -31,11 +36,12 @@ async def send_verification_code(request: SendVerificationCodeRequest, db: Sessi
     # 2. 產生驗證碼
     code = str(random.randint(100000, 999999))
 
-    # 3. TODO: 將驗證碼暫時儲存起來，以便後續驗證
-    #    在生產環境中，通常會使用 Redis 或一個專門的資料表來儲存，並設定過期時間。
-    #    例如：cache.set(f"verify_{request.email}", code, timeout=600) # 存 10 分鐘
-    #    此處為簡化流程，我們假設驗證邏輯會在下一步完成。
-    print(f"Generated verification code for {request.email}: {code}") # 開發時印出方便測試
+    # 3. 將驗證碼和過期時間暫存起來 (10 分鐘有效)
+    verification_codes[request.email] = {
+        "code": code,
+        "expires_at": datetime.utcnow() + timedelta(minutes=10)
+    }
+    print(f"Generated verification code for {request.email}: {code}")
 
     # 4. 發送郵件
     try:
@@ -48,29 +54,31 @@ async def send_verification_code(request: SendVerificationCodeRequest, db: Sessi
     return {"message": "驗證碼已成功寄至您的信箱"}
 
 
-# --- 重構後的註冊 API ---
+# --- 修改後的註冊 API ---
 @router.post("/register", response_model=LoginResponse, status_code=status.HTTP_201_CREATED)
 async def register(user_data: UserCreate, db: Session = Depends(get_db)):
-    # 1. TODO: 驗證前端傳來的驗證碼是否正確
-    #    從暫存中讀取之前儲存的驗證碼
-    #    stored_code = cache.get(f"verify_{user_data.email}")
-    #    if not stored_code or stored_code != user_data.code:
-    #        raise HTTPException(status_code=400, detail="驗證碼錯誤或已過期")
+    # 1. 從暫存中讀取並驗證驗證碼
+    stored_code_data = verification_codes.get(user_data.email)
+    
+    if not stored_code_data:
+        raise HTTPException(status_code=400, detail="請先獲取驗證碼")
+        
+    if datetime.utcnow() > stored_code_data["expires_at"]:
+        raise HTTPException(status_code=400, detail="驗證碼已過期")
+
+    if stored_code_data["code"] != user_data.code:
+        raise HTTPException(status_code=400, detail="驗證碼錯誤")
     
     # 2. 檢查使用者名稱和 email 是否已存在 (保持不變)
     existing_user = db.query(User).filter(
         or_(User.username == user_data.username, User.email == user_data.email)
     ).first()
     if existing_user:
-        if existing_user.username == user_data.username:
-            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="此使用者名稱已被註冊")
-        else:
-            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="此電子郵件已被註冊")
-        pass
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="使用者名稱或電子郵件已被註冊")
 
-    # 3. 建立新使用者 (移除 code 欄位，因為它不屬於 User 模型)
+    # 3. 建立新使用者 (移除 code 欄位)
     new_user_dict = user_data.dict()
-    new_user_dict.pop("code", None) # 安全地移除 code
+    new_user_dict.pop("code", None)
     
     new_user = User(
         **new_user_dict,
@@ -83,8 +91,8 @@ async def register(user_data: UserCreate, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(new_user)
 
-    # 4. TODO: 驗證成功後，刪除暫存的驗證碼
-    #    cache.delete(f"verify_{user_data.email}")
+    # 4. 驗證成功後，刪除暫存的驗證碼
+    verification_codes.pop(user_data.email, None)
 
     # 5. 回傳 Token 和使用者資料 (保持不變)
     access_token = create_access_token(data={"sub": str(new_user.id)})
