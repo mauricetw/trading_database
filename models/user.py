@@ -39,3 +39,17 @@ class User(Base):
 
     def __repr__(self):
         return f"<User(id={self.id}, username={self.username}, email={self.email})>"
+
+
+class ShippingOption(Base):
+    __tablename__ = "shipping_options"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(100), nullable=False)
+    description = Column(String(255), nullable=True)
+    cost = Column(Float, nullable=False)
+    is_enabled = Column(Boolean, default=True)
+    
+    # 關聯到賣家，表示這是哪個賣家提供的運送方式
+    seller_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    seller = relationship("User", back_populates="shipping_options")

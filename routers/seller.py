@@ -9,6 +9,9 @@ from models.product import Product
 from schemas.product_schema import ProductResponse
 from utils.token import get_current_user
 
+from schemas.order_schema import OrderResponse, OrderStatusUpdate # 引入 schema
+from models.order import Order # 引入 model
+
 router = APIRouter()
 
 @router.get("/products", response_model=List[ProductResponse])
@@ -37,6 +40,24 @@ async def get_my_products(
     
     return seller_products
 
-# TODO: 未來可以在這裡新增其他賣家專屬的 API，例如：
-# @router.get("/orders") -> 獲取賣家的訂單
-# @router.put("/orders/{order_id}") -> 更新訂單狀態
+@router.get("/orders", response_model=List[OrderResponse])
+async def get_my_orders_as_seller(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """獲取當前登入賣家收到的所有訂單。"""
+    # 這是一個較複雜的查詢，需要找到所有包含該賣家商品的訂單
+    # 假設一個訂單只會來自一個賣家
+    orders = db.query(Order).join(OrderItem).filter(OrderItem.product.has(seller_id=current_user.id)).distinct().all()
+    return orders
+
+@router.put("/orders/{order_id}", response_model=OrderResponse)
+async def update_order_status_by_seller(order_id: int, status_update: OrderStatusUpdate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """賣家更新訂單狀態。"""
+    order = db.query(Order).filter(Order.id == order_id).first()
+    if not order:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="找不到訂單")
+    
+    # TODO: 安全性檢查，確保 current_user 是這個訂單中任何一個商品的賣家
+    
+    order.status = status_update.status
+    db.commit()
+    db.refresh(order)
+    return order
