@@ -1,5 +1,5 @@
 from database.db import Base
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, Float, Text
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, Float, Text, ForeignKey
 from sqlalchemy.dialects.mysql import LONGTEXT
 from sqlalchemy.types import JSON
 from sqlalchemy.orm import relationship
