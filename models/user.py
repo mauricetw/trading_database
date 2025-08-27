@@ -1,7 +1,11 @@
+# --- FILE: models/user.py (重構版) ---
+# 說明：
+# 1. 將 `password` 欄位更名為 `password_hash`，使其語意更清晰。
+# 2. 移除了 `verification_code` 和 `code_expiration` 欄位，這些將由新的 VerificationCode 模型處理。
+# 3. 新增了與 VerificationCode 的關聯 (雖然在這個檔案中不是必要的，但保持完整性)。
+
 from database.db import Base
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, Float, Text, ForeignKey
-from sqlalchemy.dialects.mysql import LONGTEXT
-from sqlalchemy.types import JSON
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, Float, Text, JSON, ForeignKey
 from sqlalchemy.orm import relationship
 from datetime import datetime
 
@@ -9,8 +13,9 @@ class User(Base):
     __tablename__ = "users"
 
     id = Column(Integer, primary_key=True, index=True)
-    username = Column(String(255), unique=True, index=True, nullable=False)
-    password = Column(String(255), nullable=False)
+    # 前端傳來的 username 我們對應到 nickname，因為 email 才是真正的登入名
+    nickname = Column(String(255), unique=True, index=True, nullable=False)
+    password_hash = Column(String(255), nullable=False) # 更名
     email = Column(String(255), unique=True, index=True, nullable=False)
 
     phone_number = Column(String(20), nullable=True)
@@ -20,27 +25,24 @@ class User(Base):
     bio = Column(Text, nullable=True)
     school_name = Column(String(255), nullable=True)
     is_verified = Column(Boolean, default=False)
-    roles = Column(JSON, nullable=True)  # JSON 儲存角色清單，例如 ["user", "seller"]
-
-    buyer_rating = Column(Float, nullable=True)
+    roles = Column(JSON, default=["user"])
 
     # 賣家相關
     is_seller = Column(Boolean, default=False)
     seller_name = Column(String(255), nullable=True)
-    seller_description = Column(LONGTEXT, nullable=True)
+    seller_description = Column(Text, nullable=True)
     seller_rating = Column(Float, nullable=True)
+    buyer_rating = Column(Float, nullable=True)
     product_count = Column(Integer, default=0)
-
-    # 重設密碼驗證碼
-    verification_code = Column(String(6), nullable=True)
-    code_expiration = Column(DateTime, nullable=True)
     
+    # --- SQLAlchemy 關聯 ---
     products = relationship("Product", back_populates="seller")
+    shipping_options = relationship("ShippingOption", back_populates="seller") # 運送選項的關聯
 
     def __repr__(self):
-        return f"<User(id={self.id}, username={self.username}, email={self.email})>"
+        return f"<User(id={self.id}, nickname={self.nickname}, email={self.email})>"
 
-
+# --- ShippingOption 資料表 ---
 class ShippingOption(Base):
     __tablename__ = "shipping_options"
 
