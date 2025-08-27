@@ -1,34 +1,24 @@
-from pydantic import BaseModel, EmailStr, validator, Field
+# --- FILE: schemas/auth_schema.py (重構版) ---
+# 說明：
+# 1. 結構完全對齊前端的 AuthResponse 和 User 模型。
+# 2. `orm_mode` 已更新為 `from_attributes`。
+# 3. `UserCreate` 中的 `username` 欄位已更名為 `nickname` 以匹配資料庫模型。
+# 4. 新增了 `TokenSchema` 來更好地組織 Token 結構。
+
+from pantic import BaseModel, EmailStr, validator, Field
 from typing import Optional, List
 from datetime import datetime
 
-# --- 新增：用於發送驗證碼請求的 Schema ---
+# --- Request Schemas ---
+
 class SendVerificationCodeRequest(BaseModel):
     email: EmailStr
 
-    @validator('email')
-    def email_must_be_ntust(cls, v):
-        if not v.endswith('@mail.ntust.edu.tw'):
-            raise ValueError('僅接受 NTUST 的信箱')
-        return v
-
 class UserCreate(BaseModel):
-    username: str
-    password: str = Field(..., min_length=8)
+    nickname: str = Field(..., alias='username') # 接收前端的 'username'，但在後端作為 'nickname'
     email: EmailStr
-    # --- 新增：接收前端傳來的驗證碼 ---
-    code: str 
-
-    @validator('email')
-    def email_must_be_ntust(cls, v):
-        if not v.endswith('@mail.ntust.edu.tw'):
-            raise ValueError('僅接受 NTUST 的信箱')
-        return v
-    
-    phone_number: Optional[str] = None
-    avatar_url: Optional[str] = None
-    bio: Optional[str] = None
-    school_name: Optional[str] = None
+    password: str = Field(..., min_length=8)
+    code: str
 
 class UserLogin(BaseModel):
     login: str
@@ -37,28 +27,23 @@ class UserLogin(BaseModel):
 class ForgotPasswordRequest(BaseModel):
     login: str
 
-    @validator('login')
-    def email_must_be_ntust_if_email(cls, v):
-        if "@" in v:
-            if not v.endswith('@mail.ntust.edu.tw'):
-                raise ValueError('若使用 email，僅接受 @mail.ntust.edu.tw 網域')
-        return v
-
 class VerifyCodeRequest(BaseModel):
-    login: str 
+    login: str
     code: str
 
 class ResetPasswordRequest(BaseModel):
     token: str
-    new_password: str = Field(..., min_length=8, description="密碼長度必須至少 8 個字元")
+    new_password: str = Field(..., min_length=8)
 
-class AuthResponse(BaseModel):
+# --- Response Schemas ---
+
+class TokenSchema(BaseModel):
     access_token: str
     token_type: str = "bearer"
 
-class UserDataForAuth(BaseModel):
+class UserResponseSchema(BaseModel):
     id: int
-    username: str
+    nickname: str = Field(..., alias='username') # 回傳給前端時，將 nickname 轉為 username
     email: EmailStr
     phone_number: Optional[str] = None
     avatar_url: Optional[str] = None
@@ -67,18 +52,19 @@ class UserDataForAuth(BaseModel):
     bio: Optional[str] = None
     school_name: Optional[str] = None
     is_verified: bool
-    roles: Optional[List[str]] = None
+    roles: List[str]
     is_seller: bool
     seller_name: Optional[str] = None
     seller_description: Optional[str] = None
     seller_rating: Optional[float] = None
+    buyer_rating: Optional[float] = None
     product_count: int
 
     class Config:
-        # --- 錯誤修正：將 orm_mode = True 改為 from_attributes = True ---
         from_attributes = True
+        populate_by_name = True # 允許使用 alias
 
-# 最終的登入/註冊回應結構
-class LoginResponse(BaseModel):
-    token: AuthResponse
-    user: UserDataForAuth
+# 最終的登入/註冊成功回應，完全匹配前端 AuthResponse 模型
+class AuthSuccessResponse(BaseModel):
+    token: TokenSchema
+    user: UserResponseSchema
