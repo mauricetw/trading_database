@@ -1,5 +1,6 @@
 # --- FILE: trading_database/main.py ---
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles # <--- 新增導入
 from fastapi.middleware.cors import CORSMiddleware
 from routers import (
     auth, 
@@ -20,6 +21,11 @@ app = FastAPI(
     version="1.0.0",
     # 可以在這裡加入更多 API 的元數據
 )
+
+# --- 新增：掛載靜態檔案目錄 ---
+# 這行程式碼告訴 FastAPI，所有對 /static 路徑的請求，
+# 都應該去專案根目錄下的 "static" 資料夾中尋找對應的檔案。
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # --- 設定 CORS 中介軟體 ---
 # 允許所有來源，方便前端在開發時進行連線。

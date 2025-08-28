@@ -1,48 +1,79 @@
-from pydantic import BaseModel
-from typing import List, Optional
+from pydantic import BaseModel, Field, model_validator
+from typing import List, Optional, Any
 from datetime import datetime
+from models.product import Product as ProductModel
 
-class UserInProductResponse(BaseModel):
+class CategorySchema(BaseModel):
     id: int
-    username: str
-    avatar_url: Optional[str] = None
-
+    name: str
     class Config:
         from_attributes = True
 
-class ProductCreate(BaseModel):
-    name: str
-    description: str
-    price: float
-    original_price: Optional[float] = None
+class SellerInProductResponse(BaseModel):
+    id: int
+    username: str
+    avatar_url: Optional[str] = None
+    class Config:
+        from_attributes = True
+
+class ProductBase(BaseModel):
+    name: str = Field(..., min_length=5)
+    description: Optional[str] = Field(None, min_length=10)
+    price: float = Field(..., gt=0)
+    original_price: Optional[float] = Field(None, gt=0)
+    stock_quantity: int = Field(..., ge=0)
     category_id: int
-    category: str
-    stock_quantity: int = 1
-    image_urls: Optional[List[str]] = []
-    tags: Optional[List[str]] = []
+    tags: Optional[List[str]] = None
+    image_urls: List[str] = Field(..., min_items=1, max_items=5)
+
+class ProductCreate(ProductBase):
+    pass
+
+class ProductUpdate(BaseModel):
+    name: Optional[str] = Field(None, min_length=5)
+    description: Optional[str] = Field(None, min_length=10)
+    price: Optional[float] = Field(None, gt=0)
+    original_price: Optional[float] = Field(None, gt=0)
+    stock_quantity: Optional[int] = Field(None, ge=0)
+    category_id: Optional[int] = None
+    tags: Optional[List[str]] = None
+    image_urls: Optional[List[str]] = Field(None, min_items=1, max_items=5)
+
+class ProductStatusUpdate(BaseModel):
+    status: str
 
 class ProductResponse(BaseModel):
     id: int
     name: str
-    description: str
+    description: Optional[str]
     price: float
     original_price: Optional[float] = None
     category_id: int
     category: str
     stock_quantity: int
     status: str
-    image_urls: Optional[List[str]] = []
-    tags: Optional[List[str]] = []
-    
-    # --- 錯誤修正 ---
-    # 將 created_at 和 updated_at 的類型改為 Optional[datetime]
-    # 這允許它們的值可以是 datetime 物件，也可以是 None (對應資料庫中的 NULL)
-    # 這樣即使手動新增的資料沒有時間戳，API 也不會因驗證失敗而崩潰。
-    created_at: Optional[datetime] = None
-    updated_at: Optional[datetime] = None
-    
+    image_urls: List[str]
+    sales_count: int
+    average_rating: Optional[float] = None
+    review_count: int
+    tags: Optional[List[str]] = None
+    created_at: datetime
+    updated_at: datetime
     seller_id: int
-    seller: UserInProductResponse
+    seller: SellerInProductResponse
+    shipping_info: Optional[dict] = None
+
+    @model_validator(mode='before')
+    @classmethod
+    def transform_from_orm(cls, data: Any) -> Any:
+        if isinstance(data, ProductModel):
+            return {
+                **{column.name: getattr(data, column.name) for column in data.__table__.columns},
+                "seller": data.seller,
+                "category": data.category.name if data.category else None,
+                "image_urls": sorted([img.image_url for img in data.images], key=lambda x: x.split("/")[-1]) if data.images else []
+            }
+        return data
 
     class Config:
         from_attributes = True

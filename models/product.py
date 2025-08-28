@@ -1,53 +1,53 @@
 from database.db import Base
-from sqlalchemy import Column, Integer, String, Float, Text, ForeignKey, DateTime, Boolean, JSON
+from sqlalchemy import Column, Integer, String, Float, Text, ForeignKey, DateTime, JSON
 from sqlalchemy.orm import relationship
 from datetime import datetime
+
+# --- 在 models/user.py 的 User 模型中，請確保有關聯 ---
+# products = relationship("Product", back_populates="seller")
+
+class Category(Base):
+    __tablename__ = "categories"
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(255), unique=True, nullable=False, index=True)
+    
+    products = relationship("Product", back_populates="category")
 
 class Product(Base):
     __tablename__ = "products"
 
-    # --- 欄位對齊與確認 ---
-    # id: Integer, 主鍵，與前端的 int id 匹配。
     id = Column(Integer, primary_key=True, index=True)
-    name = Column(String(255), nullable=False)
-    description = Column(Text, nullable=False)
-    
+    name = Column(String(255), nullable=False, index=True)
+    description = Column(Text, nullable=True)
     price = Column(Float, nullable=False)
-    original_price = Column(Float, nullable=True) # 與前端的 double? originalPrice 匹配
-
-    # 分類
-    category_id = Column(Integer, nullable=False)
-    category = Column(String(100), nullable=False) # 冗餘儲存分類名稱以加速查詢
-
-    # 庫存與狀態
-    stock_quantity = Column(Integer, default=1, nullable=False)
-    status = Column(String(50), default="available", nullable=False) # e.g., "available", "sold", "delisted"
-
-    # --- 圖片儲存：遵循最佳實踐，儲存 URL 列表 ---
-    image_urls = Column(JSON, nullable=True) # 儲存圖片 URL 陣列 (List[str])
-
-    # 銷售與評價
+    original_price = Column(Float, nullable=True)
+    stock_quantity = Column(Integer, nullable=False, default=1)
+    status = Column(String(50), default="available")
+    tags = Column(JSON, nullable=True)
     sales_count = Column(Integer, default=0)
     average_rating = Column(Float, nullable=True)
     review_count = Column(Integer, default=0)
+    shipping_info = Column(JSON, nullable=True)
 
-    # 標籤
-    tags = Column(JSON, nullable=True) # List[str]
-
-    # 時間戳
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
-    # 關聯
     seller_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     seller = relationship("User", back_populates="products")
 
-    # 運送資訊（JSON格式，彈性高）
-    shipping_info = Column(JSON, nullable=True)
+    category_id = Column(Integer, ForeignKey("categories.id"), nullable=False)
+    category = relationship("Category", back_populates="products")
+    
+    images = relationship("ProductImage", back_populates="product", cascade="all, delete-orphan")
 
-    # --- 邏輯修正：移除 is_favorite 和 is_sold ---
-    # is_favorite 應由使用者和商品的關聯表來管理。
-    # is_sold 的狀態應由 status 或 stock_quantity 來判斷，不在資料庫中重複儲存。
+class ProductImage(Base):
+    __tablename__ = "product_images"
+    id = Column(Integer, primary_key=True, index=True)
+    image_url = Column(String(500), nullable=False)
+    display_order = Column(Integer, default=0)
+    
+    product_id = Column(Integer, ForeignKey("products.id"), nullable=False)
+    product = relationship("Product", back_populates="images")
 
     def __repr__(self):
         return f"<Product(id={self.id}, name='{self.name}')>"
