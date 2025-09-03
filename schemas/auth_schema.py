@@ -5,7 +5,7 @@
 # 3. `UserCreate` 中的 `username` 欄位已更名為 `nickname` 以匹配資料庫模型。
 # 4. 新增了 `TokenSchema` 來更好地組織 Token 結構。
 
-from pantic import BaseModel, EmailStr, validator, Field
+from pydantic import BaseModel, EmailStr, validator, Field
 from typing import Optional, List
 from datetime import datetime
 

@@ -1,12 +1,13 @@
 # --- FILE: trading_database/main.py ---
 from fastapi import FastAPI
-from fastapi.staticfiles import StaticFiles # <--- 新增導入
+from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from routers import (
     auth, 
     users, 
     products, 
-    seller, 
+    seller,
+    uploads,
     cart, 
     wishlist,
     announcements,
@@ -49,11 +50,11 @@ app.add_middleware(
 
 app.include_router(auth.router, prefix="/auth", tags=["使用者認證 (Authentication)"])
 app.include_router(users.router, prefix="/users", tags=["使用者資料 (Users)"])
-app.include_router(products.router, prefix="/products", tags=["商品 (Products)"])
-
-app.include_router(seller.router, prefix="/seller", tags=["賣家中心 (Seller)"])
+app.include_router(products.router_products, prefix="/products", tags=["公開商品 (Public Products)"]) 
+app.include_router(seller.router_seller, prefix="/seller", tags=["賣家中心 (Seller)"])
+app.include_router(uploads.router_uploads, prefix="/uploads", tags=["檔案上傳 (Uploads)"])
 app.include_router(cart.router, prefix="/cart", tags=["購物車 (Cart)"])
-app.include_router(wishlist.router, prefix="/wishlist", tags=["收藏清單 (Wishlist)"])
+app.include_router(wishlist.router, prefix="/wishlist", tags=["願望清單 (Wishlist)"])
 app.include_router(announcements.router, prefix="/announcements", tags=["公告 (Announcements)"])
 # app.include_router(orders.router, prefix="/orders", tags=["訂單 (Orders)"]) # TODO: 當 orders.py 建立後，取消此行的註解
 

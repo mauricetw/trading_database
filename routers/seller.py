@@ -1,3 +1,4 @@
+# --- FILE: routers/seller.py ---
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session, joinedload
 from typing import List
@@ -8,13 +9,14 @@ from models.product import Product, Category, ProductImage
 from schemas.product_schema import ProductCreate, ProductUpdate, ProductStatusUpdate, ProductResponse
 from utils.token import get_current_user
 
-# 初始化 API Router
-router = APIRouter(
+# --- 關鍵修正：將變數名稱從 router 改為 router_seller ---
+# 這樣才能與 main.py 中的 app.include_router(seller.router_seller, ...) 匹配
+router_seller = APIRouter(
     prefix="/seller",
     tags=["賣家中心 (Seller)"]
 )
 
-@router.post("/products", response_model=ProductResponse, status_code=status.HTTP_201_CREATED)
+@router_seller.post("/products", response_model=ProductResponse, status_code=status.HTTP_201_CREATED)
 def create_product(
     product_data: ProductCreate, 
     db: Session = Depends(get_db), 
@@ -24,18 +26,14 @@ def create_product(
     上架一個新商品。
     - **需要提供認證 Token**
     """
-    if not db.query(Category).filter(Category.id == product_data.category_id).first():
+    # 檢查分類是否存在
+    category = db.query(Category).filter(Category.id == product_data.category_id).first()
+    if not category:
         raise HTTPException(status_code=404, detail="指定的分類不存在")
 
     new_product = Product(
-        name=product_data.name,
-        description=product_data.description,
-        price=product_data.price,
-        original_price=product_data.original_price,
-        stock_quantity=product_data.stock_quantity,
-        tags=product_data.tags,
-        seller_id=current_user.id,
-        category_id=product_data.category_id
+        **product_data.dict(exclude={"image_urls"}),
+        seller_id=current_user.id
     )
     
     # 根據 image_urls 列表建立 ProductImage 紀錄
@@ -47,7 +45,7 @@ def create_product(
     db.refresh(new_product)
     return new_product
 
-@router.get("/products", response_model=List[ProductResponse])
+@router_seller.get("/products", response_model=List[ProductResponse])
 def get_my_products(
     db: Session = Depends(get_db), 
     current_user: User = Depends(get_current_user)
@@ -62,7 +60,7 @@ def get_my_products(
         joinedload(Product.images)
     ).order_by(Product.created_at.desc()).all()
 
-@router.put("/products/{product_id}", response_model=ProductResponse)
+@router_seller.put("/products/{product_id}", response_model=ProductResponse)
 def update_product(
     product_id: int, 
     product_data: ProductUpdate, 
@@ -74,11 +72,10 @@ def update_product(
     - **需要提供認證 Token**
     - 只有商品擁有者才能更新。
     """
-    product = db.query(Product).options(
-        joinedload(Product.seller), 
-        joinedload(Product.category), 
-        joinedload(Product.images)
-    ).filter(Product.id == product_id, Product.seller_id == current_user.id).first()
+    product = db.query(Product).filter(
+        Product.id == product_id, 
+        Product.seller_id == current_user.id
+    ).first()
     
     if not product:
         raise HTTPException(status_code=404, detail="找不到商品或您沒有權限")
@@ -88,8 +85,8 @@ def update_product(
     # 如果請求中包含 image_urls，則執行替換操作
     if "image_urls" in update_data:
         # 先刪除所有舊圖片
-        for image in product.images:
-            db.delete(image)
+        product.images.clear()
+        db.flush() # 立即將刪除操作同步到資料庫會話
         # 再新增所有新圖片
         for i, url in enumerate(update_data["image_urls"]):
             product.images.append(ProductImage(image_url=url, display_order=i))
@@ -103,7 +100,7 @@ def update_product(
     db.refresh(product)
     return product
 
-@router.patch("/products/{product_id}/status", response_model=ProductResponse)
+@router_seller.patch("/products/{product_id}/status", response_model=ProductResponse)
 def update_product_status(
     product_id: int, 
     status_data: ProductStatusUpdate, 
@@ -113,7 +110,6 @@ def update_product_status(
     """
     更新商品的狀態 (例如：上架/下架)。
     - **需要提供認證 Token**
-    - 只有商品擁有者才能更新。
     """
     product = db.query(Product).filter(Product.id == product_id, Product.seller_id == current_user.id).first()
     if not product:
@@ -124,7 +120,7 @@ def update_product_status(
     db.refresh(product)
     return product
 
-@router.delete("/products/{product_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router_seller.delete("/products/{product_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_product(
     product_id: int, 
     db: Session = Depends(get_db), 
@@ -133,12 +129,10 @@ def delete_product(
     """
     刪除一件商品。
     - **需要提供認證 Token**
-    - 只有商品擁有者才能刪除。
     """
     product = db.query(Product).filter(Product.id == product_id, Product.seller_id == current_user.id).first()
-    if not product:
-        raise HTTPException(status_code=404, detail="找不到商品或您沒有權限")
-        
-    db.delete(product)
-    db.commit()
+    if product:
+        db.delete(product)
+        db.commit()
+    # 無論商品是否存在或是否有權限，都回傳成功，避免攻擊者猜測 ID
     return None
