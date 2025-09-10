@@ -1,10 +1,4 @@
 # --- FILE: routers/auth.py (重構版) ---
-# 說明：
-# 1. 所有驗證碼邏輯都已改為使用新的 `VerificationCode` 資料庫模型，移除了記憶體字典。
-# 2. 修復了註冊 API 的 `TypeError` Bug。
-# 3. 統一了所有 API 的錯誤處理和成功回應結構。
-# 4. 忘記密碼流程現在更加安全，透過 JWT Token 進行驗證。
-
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
@@ -32,10 +26,21 @@ async def _send_and_save_code(email: str, purpose: CodePurpose, db: Session):
     code = ''.join(random.choices(string.digits, k=6))
     
     # 刪除該 email 和 purpose 的舊有驗證碼
-    db.query(VerificationCode).filter(VerificationCode.email == email, VerificationCode.purpose == purpose).delete()
+    db.query(VerificationCode).filter(
+        VerificationCode.email == email,
+        VerificationCode.purpose == purpose
+    ).delete()
 
-    # 建立新的驗證碼紀錄
-    new_code = VerificationCode(email=email, code=code, purpose=purpose)
+    # --- 設定此驗證碼的過期時間 ---
+    expires_at = datetime.utcnow() + timedelta(minutes=10)
+
+    # 4. 建立新的驗證碼資料庫紀錄，並包含過期時間
+    new_code = VerificationCode(
+        email=email, 
+        code=code, 
+        expires_at=expires_at, # <--- 將過期時間儲存到資料庫
+        purpose=purpose
+    )
     db.add(new_code)
     db.commit()
 
@@ -96,7 +101,9 @@ async def register(user_data: UserCreate, db: Session = Depends(get_db)):
 
 @router.post("/login", response_model=AuthSuccessResponse)
 async def login(form_data: UserLogin, db: Session = Depends(get_db)):
-    db_user = db.query(User).filter(User.email == form_data.login).first()
+    db_user = db.query(User).filter(
+        or_(User.nickname == form_data.login, User.email == form_data.login)
+    ).first()
     
     if not db_user or not verify_password(form_data.password, db_user.password_hash):
         raise HTTPException(

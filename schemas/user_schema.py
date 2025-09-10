@@ -1,24 +1,33 @@
-from pydantic import BaseModel, Field
-from typing import Optional
-from pydantic.alias_generators import to_camel
+# --- FILE: schemas/user_schema.py ---
+from pydantic import BaseModel, EmailStr, Field
+from typing import Optional, List
+from datetime import datetime
 
+# --- 用於回傳給前端的、精簡的公開個人資料 ---
 class UserPublicProfile(BaseModel):
     id: int
-    username: str
+    # --- 關鍵修正：從 nickname 讀取，但在 JSON 中顯示為 username ---
+    username: str = Field(validation_alias='nickname')
     avatar_url: Optional[str] = None
-    school_name: Optional[str] = None
-    buyer_rating: Optional[float] = None
-    seller_rating: Optional[float] = None
-
+    
     class Config:
-        # --- 錯誤修正：將 orm_mode = True 改為 from_attributes = True ---
         from_attributes = True
-        alias_generator = to_camel
-        populate_by_name = True
 
+# --- 用於回傳給前端的、更完整的個人資料 ---
 class UserProfileResponse(BaseModel):
-    user: UserPublicProfile
-
+    id: int
+    # --- 同步修正 ---
+    username: str = Field(validation_alias='nickname')
+    email: EmailStr
+    phone_number: Optional[str] = None
+    avatar_url: Optional[str] = None
+    registered_at: datetime
+    last_login_at: Optional[datetime] = None
+    bio: Optional[str] = None
+    school_name: Optional[str] = None
+    is_verified: bool
+    roles: List[str]
+    is_seller: bool
+    
     class Config:
-        alias_generator = to_camel
-        populate_by_name = True
+        from_attributes = True

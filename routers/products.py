@@ -10,7 +10,6 @@ from schemas.product_schema import ProductResponse, CategorySchema
 
 # 初始化 API Router
 router_products = APIRouter(
-    prefix="/products",
     tags=["公開商品 API (Public Products)"]
 )
 

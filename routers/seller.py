@@ -12,7 +12,7 @@ from utils.token import get_current_user
 # --- 關鍵修正：將變數名稱從 router 改為 router_seller ---
 # 這樣才能與 main.py 中的 app.include_router(seller.router_seller, ...) 匹配
 router_seller = APIRouter(
-    prefix="/seller",
+    
     tags=["賣家中心 (Seller)"]
 )
 
