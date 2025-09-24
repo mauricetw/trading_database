@@ -17,6 +17,8 @@ class Order(Base):
     total_amount = Column(Float, nullable=False)
     shipping_address = Column(JSON, nullable=False) # 將地址資訊以 JSON 格式儲存快照
     shipping_method = Column(JSON, nullable=False) # 將運送方式以 JSON 格式儲存快照
+
+    status_history = Column(JSON, nullable=True)
     
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
