@@ -19,7 +19,6 @@ class User(Base):
     school_name = Column(String(255), nullable=True)
     is_verified = Column(Boolean, default=False)
     roles = Column(JSON, default=["user"])
-
     is_seller = Column(Boolean, default=False)
     seller_name = Column(String(255), nullable=True)
     seller_description = Column(Text, nullable=True)
@@ -27,20 +26,27 @@ class User(Base):
     buyer_rating = Column(Float, nullable=True)
     product_count = Column(Integer, default=0)
     
-    products = relationship("Product", back_populates="seller")
-    shipping_options = relationship("ShippingOption", back_populates="seller")
+    # --- SQLAlchemy 關聯 ---
+    products = relationship("Product", back_populates="seller", cascade="all, delete-orphan")
+    shipping_options = relationship("ShippingOption", back_populates="seller", cascade="all, delete-orphan")
+    
+    # --- 加入與 CartItem 和 WishlistItem 的雙向關聯 ---
+    cart_items = relationship("CartItem", back_populates="user", cascade="all, delete-orphan")
+    wishlist_items = relationship("WishlistItem", back_populates="user", cascade="all, delete-orphan")
+
+    # --- 新增與 Address 的關聯 ---
+    addresses = relationship("Address", back_populates="user", cascade="all, delete-orphan")
 
     def __repr__(self):
         return f"<User(id={self.id}, nickname={self.nickname}, email={self.email})>"
 
+# (ShippingOption 模型保持不變)
 class ShippingOption(Base):
     __tablename__ = "shipping_options"
-
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(100), nullable=False)
     description = Column(String(255), nullable=True)
     cost = Column(Float, nullable=False)
     is_enabled = Column(Boolean, default=True)
-    
     seller_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     seller = relationship("User", back_populates="shipping_options")

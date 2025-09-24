@@ -1,28 +1,34 @@
-# --- FILE: schemas/order_schema.py (新檔案) ---
-from pydantic import BaseModel
+# --- FILE: schemas/order_schema.py ---
+from pydantic import BaseModel, Field
 from typing import List, Optional
 from datetime import datetime
-from .product_schema import ProductResponse # 引入商品資訊以在訂單中顯示
+from .product_schema import ProductResponse # 引入 ProductResponse
 
-class OrderItemResponse(BaseModel):
-    id: int
+class OrderItemSchema(BaseModel):
+    product_id: int
     quantity: int
     price_at_purchase: float
-    product: ProductResponse
+    product: ProductResponse # 巢狀嵌入完整的商品資訊
 
     class Config:
         from_attributes = True
 
 class OrderResponse(BaseModel):
     id: int
-    total_amount: float
+    user_id: int
     status: str
-    shipping_info: dict
+    total_amount: float
+    shipping_address: dict
+    shipping_method: dict
     created_at: datetime
-    items: List[OrderItemResponse]
+    items: List[OrderItemSchema]
 
     class Config:
         from_attributes = True
 
-class OrderStatusUpdate(BaseModel):
-    status: str # 期望前端傳來新的狀態字串
+class OrderCreate(BaseModel):
+    address_id: int
+    shipping_option_id: int
+    # 前端傳入的是 product_id 列表，而不是 cart_item_id
+    product_ids: List[int] 
+    coupon_code: Optional[str] = None

@@ -11,7 +11,8 @@ from routers import (
     cart, 
     wishlist,
     announcements,
-    # orders # TODO: 當 orders.py 建立後，取消此行的註解
+    address,
+    orders,
 )
 from database.db import engine
 
@@ -56,7 +57,8 @@ app.include_router(uploads.router_uploads, prefix="/uploads", tags=["檔案上�
 app.include_router(cart.router, prefix="/cart", tags=["購物車 (Cart)"])
 app.include_router(wishlist.router, prefix="/wishlist", tags=["願望清單 (Wishlist)"])
 app.include_router(announcements.router, prefix="/announcements", tags=["公告 (Announcements)"])
-# app.include_router(orders.router, prefix="/orders", tags=["訂單 (Orders)"]) # TODO: 當 orders.py 建立後，取消此行的註解
+app.include_router(address.router_address, prefix="/addresses", tags=["地址管理 (Addresses)"])
+app.include_router(orders.router_orders, prefix="/orders", tags=["訂單 (Orders)"])
 
 
 # --- 根目錄 API 端點 ---

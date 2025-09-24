@@ -5,7 +5,7 @@ from typing import Optional
 
 from database.db import get_db
 from models.user import User
-from schemas.user_schema import UserProfileResponse, UserPublicProfile
+from schemas.user_schema import UserProfileResponse, UserPublicProfile, UserUpdate
 from utils.token import get_current_user
 
 router = APIRouter()
@@ -22,22 +22,23 @@ async def get_current_user_profile(
 
 @router.put("/me")
 async def update_current_user_profile(
-    # TODO: 建立一個 UserUpdate Pydantic schema 來驗證傳入的資料
-    # user_data: UserUpdate,
+    user_data: UserUpdate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     """
     更新當前登入使用者的個人資料。
-    (此功能目前為骨架，待實作)
+    - 支援部分更新 (只傳送有變更的欄位)。
     """
-    # 範例邏輯 (待擴充):
-    # current_user.username = user_data.username
-    # current_user.bio = user_data.bio
-    # db.commit()
-    # db.refresh(current_user)
-    # return current_user
-    raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="此功能尚未實作")
+    # exclude_unset=True 確保我們只獲取前端有傳送的欄位
+    update_data = user_data.dict(exclude_unset=True)
+
+    for key, value in update_data.items():
+        setattr(current_user, key, value)
+    
+    db.commit()
+    db.refresh(current_user)
+    return current_user
 
 
 @router.get("/{user_id}", response_model=UserProfileResponse)
