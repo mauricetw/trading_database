@@ -12,7 +12,10 @@ from models.user_interactions import CartItem
 from schemas.order_schema import OrderCreate, OrderResponse
 from utils.token import get_current_user
 
-router_orders = APIRouter
+router_orders = APIRouter(
+    prefix="/orders",
+    tags=["訂單 (Orders)"]
+)
 
 # 模擬優惠券驗證
 def validate_coupon(code: str, total: float):

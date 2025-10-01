@@ -5,7 +5,9 @@ from typing import Optional
 
 from database.db import get_db
 from models.user import User
+from models.product import Product
 from schemas.user_schema import UserProfileResponse, UserPublicProfile, UserUpdate
+from schemas.product_schema import ProductResponse
 from utils.token import get_current_user
 
 router = APIRouter()
@@ -19,6 +21,26 @@ async def get_current_user_profile(
     這個 API 會透過 JWT Token 自動識別使用者身份。
     """
     return current_user
+
+# --- 獲取特定賣家的所有「公開」商品 ---
+@router.get("/{user_id}/products", response_model=list[ProductResponse])
+def get_products_by_seller(user_id: int, db: Session = Depends(get_db)):
+    """獲取指定賣家 ID 的所有「銷售中」的商品列表。"""
+    products = (
+        db.query(Product)
+        .filter(
+            Product.seller_id == user_id,
+            Product.status == "available" # 只顯示公開銷售中的商品
+        )
+        .options(
+            joinedload(Product.seller),
+            joinedload(Product.category),
+            joinedload(Product.images)
+        )
+        .order_by(Product.created_at.desc())
+        .all()
+    )
+    return products
 
 @router.put("/me")
 async def update_current_user_profile(

@@ -1,6 +1,6 @@
 # --- FILE: models/user_interactions.py ---
 from database.db import Base
-from sqlalchemy import Column, Integer, DateTime, ForeignKey
+from sqlalchemy import Column, Integer, DateTime, ForeignKey, UniqueConstraint
 from sqlalchemy.orm import relationship
 from datetime import datetime
 
@@ -35,9 +35,14 @@ class WishlistItem(Base):
     product_id = Column(Integer, ForeignKey("products.id"), nullable=False)
     added_at = Column(DateTime, default=datetime.utcnow)
 
-    # --- 關鍵修正：建立雙向關聯並優化查詢效能 ---
+    # --- 建立雙向關聯並優化查詢效能 ---
     user = relationship("User", back_populates="wishlist_items")
+    # "joined" 是一個效能優化，讓 SQLAlchemy 在查詢時自動 JOIN 商品資料
     product = relationship("Product", lazy="joined")
+
+    # --- 加入唯一性約束 ---
+    # 確保同一個使用者不能對同一個商品重複收藏
+    __table_args__ = (UniqueConstraint('user_id', 'product_id', name='_user_product_uc'),)
 
     def __repr__(self):
         return f"<WishlistItem(user_id={self.user_id}, product_id={self.product_id})>"

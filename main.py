@@ -12,6 +12,7 @@ from routers import (
     wishlist,
     announcements,
     address,
+    shipping,
     orders,
 )
 from database.db import engine
@@ -55,10 +56,11 @@ app.include_router(products.router_products, prefix="/products", tags=["公開�
 app.include_router(seller.router_seller, prefix="/seller", tags=["賣家中心 (Seller)"])
 app.include_router(uploads.router_uploads, prefix="/uploads", tags=["檔案上傳 (Uploads)"])
 app.include_router(cart.router, prefix="/cart", tags=["購物車 (Cart)"])
-app.include_router(wishlist.router, prefix="/wishlist", tags=["願望清單 (Wishlist)"])
+app.include_router(wishlist.router_wishlist)
 app.include_router(announcements.router, prefix="/announcements", tags=["公告 (Announcements)"])
-app.include_router(address.router_address, prefix="/addresses", tags=["地址管理 (Addresses)"])
-app.include_router(orders.router_orders, prefix="/orders", tags=["訂單 (Orders)"])
+app.include_router(address.router_address)
+app.include_router(orders.router_orders)
+app.include_router(shipping.router_shipping)
 
 
 # --- 根目錄 API 端點 ---
