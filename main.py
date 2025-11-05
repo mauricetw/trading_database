@@ -14,6 +14,7 @@ from routers import (
     address,
     shipping,
     orders,
+    chat,
 )
 from database.db import engine
 
@@ -61,6 +62,7 @@ app.include_router(announcements.router, prefix="/announcements", tags=["公告 
 app.include_router(address.router_address)
 app.include_router(orders.router_orders)
 app.include_router(shipping.router_shipping)
+app.include_router(chat.router_chat)
 
 
 # --- 根目錄 API 端點 ---

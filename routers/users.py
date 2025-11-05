@@ -1,7 +1,8 @@
 # --- FILE: routers/user.py ---
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
-from typing import Optional
+from sqlalchemy.orm import Session, joinedload
+from sqlalchemy import or_
+from typing import List
 
 from database.db import get_db
 from models.user import User
@@ -79,5 +80,4 @@ async def get_user_profile_by_id(
             detail="找不到此使用者"
         )
     
-    # 回傳與 UserProfileResponse schema 匹配的巢狀結構
-    return {"user": user}
+    return user

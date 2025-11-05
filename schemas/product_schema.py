@@ -32,7 +32,7 @@ class ProductImageSchema(BaseModel):
 # --- 用於「建立」商品的 Schema，只包含前端需要提供的資料 ---
 class ProductCreate(BaseModel):
     name: str = Field(..., min_length=5)
-    description: Optional[str] = Field(None, min_length=10)
+    description: Optional[str] = Field(None)
     price: float = Field(..., gt=0)
     original_price: Optional[float] = Field(None, gt=0)
     stock_quantity: int = Field(..., ge=0)

@@ -1,13 +1,15 @@
 # --- FILE: routers/orders.py ---
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session, joinedload
-from typing import List
+from fastapi import APIRouter, Depends, HTTPException, status, Query
+from sqlalchemy.orm import Session, joinedload, contains_eager
+from typing import List, Optional
 from datetime import datetime
 
 from database.db import get_db
 from models.user import User
+from models.product import Product
 from models.address import Address
 from models.order import Order, OrderItem
+from schemas.order_schema import OrderResponse, SellerOrderStatusUpdate
 from models.user_interactions import CartItem
 from schemas.order_schema import OrderCreate, OrderResponse
 from utils.token import get_current_user
@@ -89,14 +91,13 @@ def create_order(
 
     shipping_cost = 60.0 
     discount = 0.0
-    # TODO: 根據 coupon_code 計算折扣
     total_amount = items_subtotal + shipping_cost - discount
 
-    # 建立初始的狀態歷史
+    # --- 關鍵修正：更新初始狀態的描述 ---
     initial_status_history = [{
-        "status": "established",
+        "status": "pending", # 狀態與 Order.status 保持一致
         "timestamp": datetime.utcnow().isoformat(),
-        "description": "訂單已成功建立，等待賣家確認。"
+        "description": "訂單已建立，正在等待賣家確認。"
     }]
 
     new_order = Order(
@@ -108,7 +109,8 @@ def create_order(
             "full_address": address.displayAddress
         },
         shipping_method={"id": order_data.shipping_option_id, "name": "標準配送", "cost": shipping_cost},
-        status="established",
+        # --- 關鍵修正：將新訂單的初始狀態設為 'pending' ---
+        status="pending",
         status_history=initial_status_history
     )
     db.add(new_order)
@@ -128,4 +130,3 @@ def create_order(
     db.commit()
     db.refresh(new_order)
     return new_order
-

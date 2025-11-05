@@ -47,6 +47,9 @@ class Product(Base):
     # 這個關聯確保了當一個 Product 被刪除時，所有相關的 ProductImage 也會被自動刪除。
     images = relationship("ProductImage", back_populates="product", cascade="all, delete-orphan")
 
+    # --- 關鍵新增：加入與 ChatRoom 的關聯 ---
+    chat_rooms = relationship("ChatRoom", back_populates="product", cascade="all, delete-orphan")
+
     def __repr__(self):
         return f"<Product(id={self.id}, name='{self.name}')>"
 

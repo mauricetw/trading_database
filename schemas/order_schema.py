@@ -1,6 +1,6 @@
 # --- FILE: schemas/order_schema.py ---
 from pydantic import BaseModel, Field
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Literal
 from datetime import datetime
 from .product_schema import ProductResponse
 
@@ -35,8 +35,18 @@ class OrderCreate(BaseModel):
     address_id: int
     shipping_option_id: int
     
-    # --- 關鍵修正：將 product_ids 更名為 cart_item_ids ---
+    # --- 將 product_ids 更名為 cart_item_ids ---
     # 這將使其與前端 OrderService 中發送的請求 body 完全匹配
     cart_item_ids: List[int] = Field(..., min_length=1)
     
     coupon_code: Optional[str] = None
+
+
+# --- 定義一個只接受特定狀態字串的 Literal 型別 ---
+OrderStatusEnum = Literal["pending", "failed", "completed", "rejected"]
+
+class SellerOrderStatusUpdate(BaseModel):
+    # 2. 將 status 欄位的類型改為我們定義的 Literal
+    # 這會讓 FastAPI 自動驗證傳入的值是否為這四者之一
+    status: OrderStatusEnum 
+    description: Optional[str] = Field(None, description="更新狀態時的備註，例如物流單號")

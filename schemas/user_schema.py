@@ -18,7 +18,7 @@ class UserUpdate(BaseModel):
 # --- 用於回傳給前端的、精簡的公開個人資料 ---
 class UserPublicProfile(BaseModel):
     id: int
-    # --- 關鍵修正：從 nickname 讀取，但在 JSON 中顯示為 username ---
+    
     username: str = Field(validation_alias='nickname')
     avatar_url: Optional[str] = None
     

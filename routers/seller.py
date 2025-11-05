@@ -1,11 +1,14 @@
 # --- FILE: routers/seller.py ---
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session, joinedload
-from typing import List
+from fastapi import APIRouter, Depends, HTTPException, status, Query
+from sqlalchemy.orm import Session, joinedload, contains_eager
+from typing import List, Optional
+from datetime import datetime
 
 from database.db import get_db
 from models.user import User
 from models.product import Product, Category, ProductImage
+from models.order import Order, OrderItem
+from schemas.order_schema import OrderResponse, SellerOrderStatusUpdate
 from schemas.product_schema import ProductCreate, ProductUpdate, ProductStatusUpdate, ProductResponse
 from utils.token import get_current_user
 
@@ -127,12 +130,95 @@ def delete_product(
     current_user: User = Depends(get_current_user)
 ):
     """
-    刪除一件商品。
-    - **需要提供認證 Token**
+    對一件商品進行「軟刪除」(Soft Delete)。
+    - 將商品的狀態標記為 'archived' (已封存)。
+    - 只有商品擁有者才能操作。
     """
-    product = db.query(Product).filter(Product.id == product_id, Product.seller_id == current_user.id).first()
-    if product:
-        db.delete(product)
-        db.commit()
-    # 無論商品是否存在或是否有權限，都回傳成功，避免攻擊者猜測 ID
+    product = db.query(Product).filter(
+        Product.id == product_id, 
+        Product.seller_id == current_user.id
+    ).first()
+    
+    # 即使找不到商品，也回傳成功，避免讓攻擊者知道商品是否存在
+    if not product:
+        return None
+        
+    # 將狀態更新為 'archived'，而不是從資料庫中刪除
+    product.status = "archived"
+    db.commit()
+    
     return None
+
+# --- 獲取賣家收到的所有訂單，並支援狀態篩選 ---
+@router_seller.get("/orders", response_model=List[OrderResponse])
+def get_my_orders_as_seller(
+    # --- 關鍵修正：在 description 中清楚說明可用的篩選選項 ---
+    status: Optional[str] = Query(None, description="根據訂單狀態篩選 (pending, failed, completed, rejected)"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """獲取當前登入賣家收到的所有訂單。"""
+    query = (
+        db.query(Order)
+        .join(Order.items)
+        .join(OrderItem.product)
+        .filter(Product.seller_id == current_user.id)
+        .options(
+            contains_eager(Order.items).joinedload(OrderItem.product)
+        )
+        .distinct()
+    )
+
+    if status:
+        query = query.filter(Order.status == status)
+
+    orders = query.order_by(Order.created_at.desc()).all()
+    return orders
+
+# --- 賣家更新訂單狀態 ---
+@router_seller.patch("/orders/{order_id}/status", response_model=OrderResponse)
+def update_order_status_by_seller(
+    order_id: int,
+    status_update: SellerOrderStatusUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """賣家更新指定訂單的狀態。"""
+    # 1. 查找訂單
+    order = db.query(Order).filter(Order.id == order_id).first()
+    if not order:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="找不到訂單")
+    
+    # 2. 驗證權限
+    is_seller_of_this_order = (
+        db.query(OrderItem)
+        .join(Product)
+        .filter(
+            OrderItem.order_id == order_id,
+            Product.seller_id == current_user.id
+        )
+        .first() is not None
+    )
+    if not is_seller_of_this_order:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="您沒有權限修改此訂單")
+
+    # 3. 更新狀態並新增歷史紀錄
+    order.status = status_update.status
+    
+    new_history_entry = {
+        "status": status_update.status,
+        "timestamp": datetime.utcnow().isoformat(),
+        "description": status_update.description or f"訂單狀態已由賣家更新為：{status_update.status}"
+    }
+    
+    if order.status_history:
+        order.status_history.append(new_history_entry)
+    else:
+        order.status_history = [new_history_entry]
+    
+    from sqlalchemy.orm.attributes import flag_modified
+    flag_modified(order, "status_history")
+
+    db.commit()
+    db.refresh(order)
+    return order

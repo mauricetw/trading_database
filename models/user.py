@@ -19,7 +19,7 @@ class User(Base):
     school_name = Column(String(255), nullable=True)
     is_verified = Column(Boolean, default=False)
     roles = Column(JSON, default=["user"])
-    is_seller = Column(Boolean, default=False)
+    is_seller = Column(Boolean, default=True)
     seller_name = Column(String(255), nullable=True)
     seller_description = Column(Text, nullable=True)
     seller_rating = Column(Float, nullable=True)
@@ -36,6 +36,15 @@ class User(Base):
 
     # --- 新增與 Address 的關聯 ---
     addresses = relationship("Address", back_populates="user", cascade="all, delete-orphan")
+
+    # --- 加入與 ChatRoom 的雙向關聯 ---
+    # 一個使用者可以作為買家參與多個聊天
+    chats_as_buyer = relationship("ChatRoom", foreign_keys="[ChatRoom.buyer_id]", back_populates="buyer", cascade="all, delete-orphan")
+    # 一個使用者也可以作為賣家參與多個聊天
+    chats_as_seller = relationship("ChatRoom", foreign_keys="[ChatRoom.seller_id]", back_populates="seller", cascade="all, delete-orphan")
+
+    # --- 加入與 Order 的關聯 ---
+    orders = relationship("Order", back_populates="user", cascade="all, delete-orphan")
 
     def __repr__(self):
         return f"<User(id={self.id}, nickname={self.nickname}, email={self.email})>"

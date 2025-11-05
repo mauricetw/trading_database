@@ -15,7 +15,7 @@ from alembic import context
 
 
 from database.db import Base
-from models import user, product, order, user_interactions, announcement, verification, address
+from models import user, product, order, user_interactions, announcement, verification, address, chat
 
 #------------------從env.py設定database_url--------------
 from dotenv import load_dotenv
