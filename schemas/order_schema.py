@@ -22,6 +22,12 @@ class OrderResponse(BaseModel):
     id: int
     user_id: int
     status: str
+    
+    # --- [BUG 修正] ---
+    # 2. 在 API 回應的 Pydantic Schema 中加入 payment_status
+    #    FastAPI 會自動從我們在 models/order.py 中新增的欄位讀取
+    payment_status: str 
+
     total_amount: float
     shipping_address: Dict[str, Any]
     shipping_method: Dict[str, Any]
@@ -43,7 +49,7 @@ class OrderCreate(BaseModel):
 
 
 # --- 定義一個只接受特定狀態字串的 Literal 型別 ---
-OrderStatusEnum = Literal["pending", "failed", "completed", "rejected"]
+OrderStatusEnum = Literal["pending", "preparing", "delivering", "completed", "failed", "cancelled", "rejected"]
 
 class SellerOrderStatusUpdate(BaseModel):
     # 2. 將 status 欄位的類型改為我們定義的 Literal

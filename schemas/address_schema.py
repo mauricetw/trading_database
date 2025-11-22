@@ -14,6 +14,10 @@ class AddressBase(BaseModel):
     district: Optional[str] = None
     street_address_2: Optional[str] = None
     is_default: bool = False
+    
+    # --- [BUG 修正] ---
+    # 補上 models/address.py 中存在的 additional_info 欄位
+    additional_info: Optional[Dict[str, Any]] = None
 
 # --- 用於「建立」新地址的Schema ---
 # 所有欄位都是必填的
@@ -33,6 +37,10 @@ class AddressUpdate(BaseModel):
     district: Optional[str] = None
     street_address_2: Optional[str] = None
     is_default: Optional[bool] = None
+    
+    # --- [BUG 修正] ---
+    # 更新時也允許更新 additional_info
+    additional_info: Optional[Dict[str, Any]] = None
 
 # --- 用於 API「回應」的Schema ---
 # 包含了資料庫產生的 id 和 user_id

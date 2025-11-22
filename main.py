@@ -15,6 +15,7 @@ from routers import (
     shipping,
     orders,
     chat,
+    wishpool,
 )
 from database.db import engine
 
@@ -54,7 +55,7 @@ app.add_middleware(
 app.include_router(auth.router, prefix="/auth", tags=["使用者認證 (Authentication)"])
 app.include_router(users.router, prefix="/users", tags=["使用者資料 (Users)"])
 app.include_router(products.router_products, prefix="/products", tags=["公開商品 (Public Products)"]) 
-app.include_router(seller.router_seller, prefix="/seller", tags=["賣家中心 (Seller)"])
+app.include_router(seller.router_seller)
 app.include_router(uploads.router_uploads, prefix="/uploads", tags=["檔案上傳 (Uploads)"])
 app.include_router(cart.router, prefix="/cart", tags=["購物車 (Cart)"])
 app.include_router(wishlist.router_wishlist)
@@ -63,6 +64,7 @@ app.include_router(address.router_address)
 app.include_router(orders.router_orders)
 app.include_router(shipping.router_shipping)
 app.include_router(chat.router_chat)
+app.include_router(wishpool.router_wishpool)
 
 
 # --- 根目錄 API 端點 ---

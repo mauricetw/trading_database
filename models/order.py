@@ -13,7 +13,9 @@ class Order(Base):
     
     status = Column(String(50), default="pending", nullable=False) # pending, failed, completed, rejected
 
-    # --- 付款狀態欄位 ---
+    # --- [BUG 修正] ---
+    # 1. 在資料庫模型中正式加入 payment_status 欄位
+    #    預設為 "unpaid" (未付款)
     payment_status = Column(String(50), default="unpaid", nullable=False) # 例如: unpaid, paid
 
     total_amount = Column(Float, nullable=False)
@@ -48,4 +50,4 @@ class OrderItem(Base):
 
     def __repr__(self):
         return f"<OrderItem(order_id={self.order_id}, product_id={self.product_id})>"
-
+    

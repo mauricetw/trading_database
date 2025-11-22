@@ -46,6 +46,10 @@ class User(Base):
     # --- 加入與 Order 的關聯 ---
     orders = relationship("Order", back_populates="user", cascade="all, delete-orphan")
 
+    # --- [BUG 修正] 加入與 Wishpool 的關聯 ---
+    # 這解決了 InvalidRequestError: Mapper 'Mapper[User(users)]' has no property 'wishpools'
+    wishpools = relationship("Wishpool", back_populates="user", cascade="all, delete-orphan")
+
     def __repr__(self):
         return f"<User(id={self.id}, nickname={self.nickname}, email={self.email})>"
 
