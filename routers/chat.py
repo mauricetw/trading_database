@@ -1,17 +1,15 @@
 # --- FILE: routers/chat.py ---
 from fastapi import APIRouter, Depends, HTTPException, status, WebSocket, WebSocketDisconnect, Query, BackgroundTasks
-from sqlalchemy.orm import Session, joinedload, lazyload, selectinload
+from sqlalchemy.orm import Session, joinedload, selectinload
 from sqlalchemy import or_
 from typing import List, Dict, Any
 from datetime import datetime
 
-from database.db import SessionLocal, get_db # 引入 SessionLocal 以便在 WebSocket 中使用
+from database.db import SessionLocal, get_db
 from models.user import User
 from models.product import Product
 from models.chat import ChatRoom, ChatMessage
-# 1. 引入 Schema
 from schemas.chat_schema import ChatRoomResponse, MessageResponse, ChatRoomCreateRequest
-from schemas.product_schema import ProductResponse
 from schemas.user_schema import UserPublicProfile
 from utils.token import get_current_user, SECRET_KEY, ALGORITHM
 from jose import jwt, JWTError
@@ -21,9 +19,10 @@ router_chat = APIRouter(
     tags=["聊天 (Chat)"]
 )
 
-# --- WebSocket 連線管理器 ---
+# ... (ConnectionManager 類別保持不變，省略以節省篇幅) ...
 class ConnectionManager:
     def __init__(self):
+        # 映射：room_id -> 活躍的 WebSocket 列表
         self.active_connections: Dict[int, List[WebSocket]] = {}
 
     async def connect(self, websocket: WebSocket, room_id: int):
@@ -39,95 +38,37 @@ class ConnectionManager:
                 self.active_connections[room_id].remove(websocket)
                 if not self.active_connections[room_id]:
                     del self.active_connections[room_id]
+                print(f"使用者從聊天室 {room_id} 斷線。")
             except ValueError:
-                pass # WebSocket 可能已經不在列表中
-        print(f"使用者從聊天室 {room_id} 斷線。")
+                pass
 
     async def broadcast(self, message: Dict[str, Any], room_id: int):
         if room_id in self.active_connections:
-            # 建立一個副本列表以避免在迭代時修改
-            connections = list(self.active_connections[room_id])
-            for connection in connections:
+            for connection in self.active_connections[room_id]:
                 try:
                     await connection.send_json(message)
-                except Exception as e:
-                    print(f"廣播到 {connection} 失敗: {e}")
-                    # 廣播失敗 (例如連線已中斷)，將其移除
-                    self.disconnect(connection, room_id)
+                except RuntimeError as e:
+                    pass
 
 manager = ConnectionManager()
 
-# --- 安全性修正：將 get_user_from_token 修改為拋出非 HTTP 異常 ---
+# ... (get_user_from_token 函式保持不變) ...
 def get_user_from_token(token: str, db: Session) -> User:
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         user_id = payload.get("sub")
         if user_id is None:
-            raise ValueError("Token 無效 (no sub)")
+            raise ValueError("Token 無效 (缺少 sub)")
         user = db.query(User).filter(User.id == int(user_id)).first()
         if user is None:
-            raise ValueError(f"找不到使用者 (ID: {user_id})")
+            raise ValueError("找不到使用者")
         return user
     except JWTError:
-        raise ValueError("Token 驗證失敗 (JWTError)")
+        raise ValueError("Token JWT 無效")
     except Exception as e:
-        raise ValueError(f"Token 處理失敗: {e}")
+        raise ValueError(f"Token 驗證錯誤: {e}")
 
 # --- REST API ---
-
-@router_chat.post("", response_model=ChatRoomResponse)
-def find_or_create_chat_room(
-    request: ChatRoomCreateRequest,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    """
-    尋找或建立一個基於 product_id 的聊天室。
-    - 如果買家 (current_user) 和該商品的賣家之間已存在此商品的聊天室，則返回該聊天室。
-    - 否則，建立一個新的聊天室。
-    """
-    product = db.query(Product).filter(Product.id == request.product_id).first()
-    if not product:
-        raise HTTPException(status_code=404, detail="找不到商品")
-    
-    if product.user_id == current_user.id:
-        raise HTTPException(status_code=400, detail="您不能與自己開始聊天")
-
-    # 檢查是否已存在
-    chat_room = db.query(ChatRoom).filter(
-        ChatRoom.product_id == request.product_id,
-        ChatRoom.buyer_id == current_user.id,
-        ChatRoom.seller_id == product.user_id
-    ).first()
-
-    if not chat_room:
-        # 建立新的聊天室
-        chat_room = ChatRoom(
-            product_id=request.product_id,
-            buyer_id=current_user.id,
-            seller_id=product.user_id
-        )
-        db.add(chat_room)
-        db.commit()
-        db.refresh(chat_room)
-        print(f"使用者 {current_user.id} 建立了新的聊天室 (ID: {chat_room.id}) for Product {product.id}")
-
-    # 載入關聯資料以便 Pydantic
-    db.refresh(chat_room, ['buyer', 'seller', 'product'])
-    
-    # 準備回應
-    # (注意：這裡的 'other_party' 是賣家)
-    other_party_model = chat_room.seller
-    other_party = UserPublicProfile.from_orm(other_party_model)
-
-    return ChatRoomResponse(
-        id=chat_room.id,
-        # product=chat_room.product, # (如果 schema 需要，請取消註解)
-        other_party=other_party,
-        last_message=None, # 新建立的聊天室沒有最後訊息
-        unread_count=0
-    )
-
 
 @router_chat.get("", response_model=List[ChatRoomResponse])
 def get_my_chat_rooms(
@@ -135,70 +76,60 @@ def get_my_chat_rooms(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """獲取當前使用者的聊天室列表，可根據角色篩選。"""
+    options = [
+        joinedload(ChatRoom.buyer), 
+        joinedload(ChatRoom.seller), 
+        joinedload(ChatRoom.product)
+    ]
     
-    # 為了優化查詢，使用 joinedload/selectinload 預先載入需要的資料
-    options = (
-        selectinload(ChatRoom.buyer),   # 預載入買家 (User)
-        selectinload(ChatRoom.seller),  # 預載入賣家 (User)
-        selectinload(ChatRoom.product)  # 預載入商品 (Product)
-    )
-
     if role == "buyer":
         chat_rooms_query = db.query(ChatRoom).options(*options).filter(ChatRoom.buyer_id == current_user.id)
-    else: # role == "seller"
+    else: 
         chat_rooms_query = db.query(ChatRoom).options(*options).filter(ChatRoom.seller_id == current_user.id)
         
     chat_rooms = chat_rooms_query.all()
 
     response = []
     for room in chat_rooms:
-        # 獲取最後一則訊息 (這仍然是一個 N+1 查詢，未來可以優化)
-        last_message = db.query(ChatMessage).filter(ChatMessage.chat_room_id == room.id).order_by(ChatMessage.timestamp.desc()).first()
+        last_message = db.query(ChatMessage).filter(
+            ChatMessage.chat_room_id == room.id
+        ).order_by(ChatMessage.timestamp.desc()).first()
         
-        # 獲取未讀訊息數
         unread_count = db.query(ChatMessage).filter(
             ChatMessage.chat_room_id == room.id,
             ChatMessage.receiver_id == current_user.id,
             ChatMessage.is_read == False
         ).count()
         
-        # 決定 'other_party' (對方)
         other_party_model = room.seller if role == "buyer" else room.buyer
-        
-        # 確保 'other_party_model' 不是 None (雖然理論上不應該)
-        if not other_party_model:
-            continue # 略過這個損壞的聊天室
-
         other_party = UserPublicProfile.from_orm(other_party_model)
 
         response.append(ChatRoomResponse(
             id=room.id,
-            # product=room.product, # 修正 Bug：schema 中沒有 product，已移除
+            product=room.product, 
             other_party=other_party,
-            last_message=last_message, # Pydantic 會自動處理 None
-            unread_count=unread_count
+            last_message=last_message,
+            unread_count=unread_count,
         ))
         
-    # 在 Python 中排序，因為 last_message 是動態獲取的
-    return sorted(response, key=lambda r: r.last_message.timestamp if r.last_message else datetime.min, reverse=True)
+    return sorted(
+        response, 
+        key=lambda r: r.last_message.timestamp if r.last_message else datetime.min, 
+        reverse=True
+    )
 
 @router_chat.get("/{room_id}/messages", response_model=List[MessageResponse])
 def get_chat_messages(
     room_id: int,
-    # --- [BUG 修正] ---
-    # `background_tasks` (無預設值) 必須在 `db` (有預設值) 之前
-    background_tasks: BackgroundTasks, 
+    background_tasks: BackgroundTasks, # [FIX] 修正 Depends 順序問題
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """獲取指定聊天室的所有歷史訊息，並將訊息標記為已讀。"""
     chat_room = db.query(ChatRoom).filter(ChatRoom.id == room_id).first()
     if not chat_room or (current_user.id not in [chat_room.buyer_id, chat_room.seller_id]):
         raise HTTPException(status_code=403, detail="您沒有權限存取此聊天室")
 
-    # 標記為已讀 (非同步)
-    # 為了讓 API 快速回應，將 DB 更新作為後台任務執行
+    # (使用 BackgroundTasks 處理已讀標記)
     def mark_as_read(db_session: Session, room_id: int, user_id: int):
         try:
             db_session.query(ChatMessage).filter(
@@ -207,20 +138,96 @@ def get_chat_messages(
                 ChatMessage.is_read == False
             ).update({"is_read": True})
             db_session.commit()
-            print(f"後台任務：已將聊天室 {room_id} 中使用者 {user_id} 的訊息標記為已讀")
-        except Exception as e:
-            print(f"後台任務失敗 (mark_as_read): {e}")
-            db_session.rollback()
         finally:
             db_session.close()
 
-    # 建立一個新的 DB Session 供後台任務使用
     db_for_task = SessionLocal()
     background_tasks.add_task(mark_as_read, db_for_task, room_id, current_user.id)
     
-    # 立即獲取並返回訊息
     messages = db.query(ChatMessage).filter(ChatMessage.chat_room_id == room_id).order_by(ChatMessage.timestamp.asc()).all()
     return messages
+
+# --- [修改] 尋找或建立聊天室 (支援通用聊天) ---
+@router_chat.post("", response_model=ChatRoomResponse)
+def find_or_create_chat_room(
+    request: ChatRoomCreateRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    尋找或建立聊天室。
+    1. 如果提供 product_id -> 建立針對該商品的聊天室。
+    2. 如果只提供 seller_id -> 建立與該賣家的通用聊天室 (product_id 為 NULL)。
+    """
+    
+    target_product = None
+    target_seller_id = None
+
+    # 情境 A: 針對商品聊天
+    if request.product_id:
+        target_product = db.query(Product).filter(Product.id == request.product_id).first()
+        if not target_product:
+            raise HTTPException(status_code=404, detail="找不到該商品")
+        if target_product.seller_id == current_user.id:
+            raise HTTPException(status_code=400, detail="您不能與自己開始聊天")
+        
+        target_seller_id = target_product.seller_id
+        
+        # 尋找現有的商品聊天室
+        existing_room = db.query(ChatRoom).filter(
+            ChatRoom.product_id == request.product_id,
+            ChatRoom.buyer_id == current_user.id
+        ).first()
+
+    # 情境 B: 通用聊天 (從賣家頁面)
+    elif request.seller_id:
+        if request.seller_id == current_user.id:
+            raise HTTPException(status_code=400, detail="您不能與自己開始聊天")
+        
+        target_seller_id = request.seller_id
+        
+        # 尋找現有的通用聊天室 (product_id 為 NULL)
+        existing_room = db.query(ChatRoom).filter(
+            ChatRoom.buyer_id == current_user.id,
+            ChatRoom.seller_id == request.seller_id,
+            ChatRoom.product_id == None # 關鍵：通用聊天的 product_id 為空
+        ).first()
+        
+    else:
+        raise HTTPException(status_code=400, detail="必須提供 product_id 或 seller_id")
+
+    # 如果聊天室已存在，直接回傳
+    if existing_room:
+        room = existing_room
+    else:
+        # 建立新聊天室
+        new_room = ChatRoom(
+            product_id=request.product_id, # 可能是 None
+            buyer_id=current_user.id,
+            seller_id=target_seller_id
+        )
+        db.add(new_room)
+        db.commit()
+        db.refresh(new_room)
+        room = new_room
+
+    # 準備回傳資料
+    db.refresh(room, ['buyer', 'seller', 'product'])
+    
+    other_party_model = room.seller
+    other_party = UserPublicProfile.from_orm(other_party_model)
+    
+    last_message = db.query(ChatMessage).filter(
+        ChatMessage.chat_room_id == room.id
+    ).order_by(ChatMessage.timestamp.desc()).first()
+    
+    return ChatRoomResponse(
+        id=room.id,
+        product=room.product, # 可能是 None
+        other_party=other_party,
+        last_message=last_message,
+        unread_count=0
+    )
 
 # --- WebSocket API ---
 

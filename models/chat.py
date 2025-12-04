@@ -10,9 +10,9 @@ class ChatRoom(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     
-    # --- 關鍵關聯 ---
-    # 為了能快速查詢，我們同時儲存買家、賣家和商品的 ID
-    product_id = Column(Integer, ForeignKey("products.id"), nullable=False)
+    # --- [修改] 允許 product_id 為空 (通用聊天) ---
+    product_id = Column(Integer, ForeignKey("products.id"), nullable=True)
+    
     buyer_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     seller_id = Column(Integer, ForeignKey("users.id"), nullable=False)
 
