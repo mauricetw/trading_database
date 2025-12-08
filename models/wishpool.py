@@ -12,25 +12,31 @@ class Wishpool(Base):
     __tablename__ = "wishpools"
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False) # 願望發布者 (買家)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     
     title = Column(String(255), nullable=False)
     description = Column(Text, nullable=True)
     
-    # 關聯到商品分類 (product_categories)
     category_id = Column(Integer, ForeignKey("categories.id"), nullable=True)
     
-    tags = Column(JSON, nullable=True) # 儲存為 List[str]
+    tags = Column(JSON, nullable=True)
     photo_url = Column(String(500), nullable=True)
     
-    price_min = Column(Integer, nullable=True)
-    price_max = Column(Integer, nullable=True)
-    location = Column(String(255), nullable=True)
-    course_code = Column(String(100), nullable=True) # 課程代碼
-
-    status = Column(String(50), default="open", nullable=False) # open, matched, closed
+    price = Column(Integer, nullable=False) 
+    quantity = Column(Integer, default=1, nullable=False)
     
-    # 當買家 'accept' 一個 'invite' 時，會填入這個欄位
+    # --- [修改] 使用 JSON 儲存地址快照，防止買家刪除地址後資料遺失 ---
+    # 這裡不再使用 ForeignKey("addresses.id")
+    shipping_address = Column(JSON, nullable=False) 
+    
+    # 綁定運送方式
+    shipping_name = Column(String(100), default="標準配送", nullable=False)
+    shipping_cost = Column(Float, default=60.0, nullable=False)
+
+    location = Column(String(255), nullable=True)
+    course_code = Column(String(100), nullable=True)
+
+    status = Column(String(50), default="open", nullable=False) 
     matched_item_id = Column(Integer, ForeignKey("products.id"), nullable=True)
     
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -38,13 +44,12 @@ class Wishpool(Base):
 
     # --- 關聯 Relationships ---
     user = relationship("User", back_populates="wishpools")
-    category = relationship("Category") # 假設 Category 在 models/product.py 中
-    matched_item = relationship("Product") # 假設 Product 在 models/product.py 中
-
-    # 關聯到收藏 (Favorites) - 用於計算 like_count
-    favorites = relationship("WishpoolFavorite", back_populates="wishpool", cascade="all, delete-orphan")
+    category = relationship("Category")
+    matched_item = relationship("Product")
     
-    # 關聯到邀請 (Invites) - 賣家發來的報價
+    # address 關聯已移除，因為現在是 JSON
+
+    favorites = relationship("WishpoolFavorite", back_populates="wishpool", cascade="all, delete-orphan")
     invites = relationship("WishpoolInvite", back_populates="wishpool", cascade="all, delete-orphan")
 
 class WishpoolFavorite(Base):

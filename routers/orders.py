@@ -71,8 +71,6 @@ def create_order(
     if not address:
         raise HTTPException(status_code=404, detail="找不到指定的地址或地址不屬於您")
 
-    # --- [BUG 修正：防止超賣] ---
-
     # 2. 找出所有購物車中的商品 ID
     cart_items_query = db.query(CartItem).filter(
         CartItem.user_id == current_user.id,
@@ -85,9 +83,7 @@ def create_order(
 
     product_ids_to_lock = [item.product_id for item in cart_items]
 
-    # 3. [關鍵] 鎖定商品：
-    #    在 "事務 (Transaction)" 中鎖定所有相關商品，防止其他請求同時修改它們。
-    #    with_for_update() 會鎖定這些資料列，直到 db.commit()
+    # 3. [關鍵] 鎖定商品
     try:
         locked_products = db.query(Product).filter(
             Product.id.in_(product_ids_to_lock)
@@ -112,7 +108,7 @@ def create_order(
         
         items_subtotal += item.quantity * locked_product.price
 
-    # 5. 建立訂單 (此時商品仍被鎖定)
+    # 5. 建立訂單
     shipping_cost = 60.0 
     discount = 0.0
     total_amount = items_subtotal + shipping_cost - discount
@@ -152,7 +148,6 @@ def create_order(
         locked_product = locked_product_map[item.product_id]
         locked_product.stock_quantity -= item.quantity
         
-        # --- [新功能] 更新商品狀態 ---
         # 如果庫存歸零，將商品狀態設為 "sold"
         if locked_product.stock_quantity <= 0:
             locked_product.status = "sold"
@@ -160,7 +155,6 @@ def create_order(
         db.add(order_item)
         db.delete(item) # 從購物車刪除
 
-    # 7. 提交事務 (Transaction)，釋放所有鎖
     try:
         db.commit()
     except Exception as e:
@@ -178,7 +172,6 @@ def complete_order_by_buyer(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    # ... (此函式保持不變) ...
     # 1. 查找訂單並驗證擁有者
     order = db.query(Order).filter(
         Order.id == order_id,
@@ -197,7 +190,7 @@ def complete_order_by_buyer(
 
     # 3. 更新狀態
     order.status = "completed"
-    order.payment_status = "paid" # 貨到付款完成，標記為已付款
+    order.payment_status = "paid"
     
     new_history_entry = {
         "status": "completed",
@@ -210,9 +203,80 @@ def complete_order_by_buyer(
     else:
         order.status_history = [new_history_entry]
     
-    # 標記 JSON 欄位已修改
     flag_modified(order, "status_history")
 
     db.commit()
     db.refresh(order)
     return order
+
+
+# --- [新功能] 買家取消訂單 ---
+@router_orders.patch("/{order_id}/cancel", response_model=OrderResponse)
+def cancel_order_by_buyer(
+    order_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    買家取消訂單。
+    - 只能在 'pending' (待確認) 或 'preparing' (待出貨) 狀態下取消。
+    - 取消後，商品庫存會自動回補。
+    """
+    # 1. 鎖定訂單和相關商品 (避免併發問題)
+    try:
+        order = db.query(Order).filter(
+            Order.id == order_id,
+            Order.user_id == current_user.id
+        ).options(
+            joinedload(Order.items).joinedload(OrderItem.product).with_for_update()
+        ).first()
+
+        if not order:
+            raise HTTPException(status_code=404, detail="找不到訂單或您沒有權限")
+
+        # 2. 驗證狀態
+        allowed_statuses = ["pending", "preparing"]
+        if order.status not in allowed_statuses:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"無法取消此訂單，因為訂單狀態為 '{order.status}'，只能取消 'pending' 或 'preparing' 的訂單"
+            )
+
+        # 3. [關鍵] 回補庫存
+        print(f"買家 {current_user.id} 取消訂單 {order.id}，開始回補庫存...")
+        for item in order.items:
+            if item.product:
+                print(f"回補商品 {item.product.id} 庫存 +{item.quantity}")
+                item.product.stock_quantity += item.quantity
+                
+                # 如果商品狀態是 'sold' 或 'reserved'，將其改回 'available' (可販售)
+                if item.product.status in ["sold", "reserved"]:
+                    item.product.status = "available"
+
+        # 4. 更新訂單狀態
+        order.status = "cancelled"
+        
+        new_history_entry = {
+            "status": "cancelled",
+            "timestamp": datetime.utcnow().isoformat(),
+            "description": "買家已取消訂單。"
+        }
+        
+        if order.status_history:
+            order.status_history.append(new_history_entry)
+        else:
+            order.status_history = [new_history_entry]
+        
+        flag_modified(order, "status_history")
+
+        db.commit()
+        db.refresh(order)
+        return order
+
+    except Exception as e:
+        db.rollback()
+        print(f"取消訂單失敗: {e}")
+        # 如果是 HTTPException 則重新拋出
+        if isinstance(e, HTTPException):
+            raise e
+        raise HTTPException(status_code=500, detail=f"伺服器錯誤: {str(e)}")
